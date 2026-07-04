@@ -20695,19 +20695,46 @@ window.toggleInjuryPrintPreview = function(){
   const siren = document.getElementById('medEmgSiren');
 
   function showNurseAlert(id, alert){
-    currentAlertId = id; currentAlert = alert;
-    const t = new Date(alert.createdAt).toLocaleString('en-GB');
-    const meta = document.getElementById('medEmgAlertMeta');
-    if (meta) meta.innerHTML = `
-      🔢 <b>رقم البلاغ:</b> ${alert.alertNumber}<br/>
-      🕐 <b>الوقت:</b> ${t}<br/>
-      📍 <b>الإحداثيات:</b> ${alert.lat.toFixed(6)}, ${alert.lng.toFixed(6)}<br/>
-      🗺️ <a href="${alert.mapsUrl}" target="_blank" style="color:#0f4c75;">فتح على Google Maps</a>`;
-    const iframe = document.getElementById('medEmgAlertMap');
-    if (iframe) iframe.src = `https://maps.google.com/maps?q=${alert.lat},${alert.lng}&z=17&output=embed`;
-    document.getElementById('medEmgNurseAlert').classList.add('show');
-    try { siren.currentTime = 0; siren.play().catch(()=>{}); } catch(_){}
-    if (navigator.vibrate) navigator.vibrate([400,150,400,150,400]);
+    try {
+      console.log('[MedEmg] showing overlay for', id, alert);
+      currentAlertId = id; currentAlert = alert;
+      const lat = Number(alert && alert.lat);
+      const lng = Number(alert && alert.lng);
+      const t = new Date(alert && alert.createdAt ? alert.createdAt : Date.now()).toLocaleString('en-GB');
+      const meta = document.getElementById('medEmgAlertMeta');
+      const latTxt = isFinite(lat) ? lat.toFixed(6) : '—';
+      const lngTxt = isFinite(lng) ? lng.toFixed(6) : '—';
+      const mapsUrl = (alert && alert.mapsUrl) || (isFinite(lat) && isFinite(lng) ? ('https://www.google.com/maps?q=' + lat + ',' + lng) : '#');
+      if (meta) meta.innerHTML = `
+        🔢 <b>رقم البلاغ:</b> ${(alert && alert.alertNumber) || id}<br/>
+        🕐 <b>الوقت:</b> ${t}<br/>
+        📍 <b>الإحداثيات:</b> ${latTxt}, ${lngTxt}<br/>
+        🗺️ <a href="${mapsUrl}" target="_blank" style="color:#0f4c75;">فتح على Google Maps</a>`;
+      const iframe = document.getElementById('medEmgAlertMap');
+      if (iframe && isFinite(lat) && isFinite(lng)) iframe.src = `https://maps.google.com/maps?q=${lat},${lng}&z=17&output=embed`;
+      let overlay = document.getElementById('medEmgNurseAlert');
+      if (!overlay){
+        console.warn('[MedEmg] overlay element missing, re-injecting');
+        overlay = document.createElement('div');
+        overlay.id = 'medEmgNurseAlert';
+        overlay.innerHTML = `<div class="med-emg-alert-inner">
+          <h1><i class="fas fa-truck-medical"></i> بلاغ طوارئ طبي!</h1>
+          <div class="meta" id="medEmgAlertMeta">${meta ? meta.innerHTML : ''}</div>
+          <iframe id="medEmgAlertMap" style="width:100%; height:260px; border:0; border-radius:12px;" loading="lazy"></iframe>
+          <div class="actions">
+            <button class="med-emg-btn primary" onclick="medEmgOpenMap()"><i class="fas fa-map"></i> فتح الموقع</button>
+            <button class="med-emg-btn warn" onclick="medEmgStopSiren()"><i class="fas fa-volume-mute"></i> إيقاف الصوت</button>
+            <button class="med-emg-btn secondary" onclick="medEmgAcknowledge()"><i class="fas fa-check"></i> تم الاستلام</button>
+            <button class="med-emg-btn success" onclick="medEmgResolve()"><i class="fas fa-flag-checkered"></i> إنهاء الحالة</button>
+          </div></div>`;
+        document.body.appendChild(overlay);
+      }
+      overlay.classList.add('show');
+      try { if (siren){ siren.currentTime = 0; siren.play().catch(()=>{}); } } catch(_){ }
+      try { if (navigator.vibrate) navigator.vibrate([400,150,400,150,400]); } catch(_){ }
+    } catch(e){
+      console.error('[MedEmg] showNurseAlert failed:', e);
+    }
   }
 
   window.medEmgStopSiren = function(){ try { siren.pause(); siren.currentTime = 0; } catch(_){} };
@@ -20733,16 +20760,60 @@ window.toggleInjuryPrintPreview = function(){
   if (params.get('page') !== 'medical-emergency'){
     const seen = new Set();
     function handleIncoming(id, val){
+      console.log('[MedEmg] incoming alert', id, val);
       if (!val || seen.has(id)) return;
       seen.add(id);
       if (val.status === 'Active'){ showNurseAlert(id, val); }
     }
+
+    let nurseAttached = false;
+    function attachNurseListener(){
+      if (nurseAttached || !db) return;
+      nurseAttached = true;
+      console.log('[MedEmg] attaching nurse listener');
+      try {
+        db.ref('emergency_alerts').limitToLast(50).on(
+          'child_added',
+          snap => handleIncoming(snap.key, snap.val()),
+          err => {
+            nurseAttached = false;
+            console.error('[MedEmg] listener error:', err);
+            if (err && (err.code === 'PERMISSION_DENIED' || /permission/i.test(err.message||''))){
+              if (typeof showNotification === 'function') {
+                showNotification('⚠️ لا يمكن استقبال بلاغات الطوارئ — تأكد من تسجيل الدخول (Firebase permission denied).', 'error');
+              }
+            }
+          }
+        );
+        db.ref('emergency_alerts').on('child_changed', snap => {
+          const v = snap.val();
+          if (currentAlertId === snap.key) currentAlert = v;
+          // لو بلاغ قديم رجع Active بعد ما اتشاف نعرضه تانى
+          if (v && v.status === 'Active' && !seen.has(snap.key)) handleIncoming(snap.key, v);
+        }, err => console.error('[MedEmg] child_changed error:', err));
+      } catch(e){
+        nurseAttached = false;
+        console.error('[MedEmg] failed to attach nurse listener:', e);
+      }
+    }
+
     if (db){
-      db.ref('emergency_alerts').limitToLast(50).on('child_added', snap => handleIncoming(snap.key, snap.val()));
-      db.ref('emergency_alerts').on('child_changed', snap => {
-        const v = snap.val();
-        if (currentAlertId === snap.key) currentAlert = v;
-      });
+      // انتظر تسجيل الدخول قبل الاشتراك (قواعد Firebase تتطلب auth != null للقراءة)
+      if (typeof firebase !== 'undefined' && firebase.auth){
+        try {
+          firebase.auth().onAuthStateChanged(u => {
+            if (u) attachNurseListener();
+            else console.log('[MedEmg] waiting for auth to attach nurse listener');
+          });
+          // احتياطى: لو المستخدم بالفعل مسجّل الدخول (currentUser جاهز)
+          if (firebase.auth().currentUser) attachNurseListener();
+        } catch(e){
+          console.warn('[MedEmg] auth not available, attaching listener directly:', e);
+          attachNurseListener();
+        }
+      } else {
+        attachNurseListener();
+      }
     } else {
       // localStorage fallback: poll + listen
       localListeners.push(handleIncoming);
