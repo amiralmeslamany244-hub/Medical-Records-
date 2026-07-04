@@ -20371,6 +20371,7 @@ window.toggleInjuryPrintPreview = function(){
 <!-- ====================== /EMERGENCY SCAN LANDING ====================== -->
 
 <!-- ====================== MEDICAL EMERGENCY QR (PUBLIC HELP REQUEST) ====================== -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@500;700&display=swap">
 <style>
   #medEmgModal.modal-overlay,
   #medEmgNurseAlert,
@@ -20402,7 +20403,7 @@ window.toggleInjuryPrintPreview = function(){
   .med-emg-public .icon-wrap { width:140px; height:140px; border-radius:50%; background:linear-gradient(135deg,#dc2626,#7f1d1d); color:#fff; display:flex; align-items:center; justify-content:center; font-size:70px; box-shadow:0 20px 50px rgba(220,38,38,.4); margin-bottom:24px; animation:medEmgHeart 1.4s ease-in-out infinite; }
   @keyframes medEmgHeart { 0%,100%{transform:scale(1);} 50%{transform:scale(1.08);} }
   .med-emg-public h1 { color:#7f1d1d; font-size:32px; font-weight:800; margin-bottom:10px; }
-  .med-emg-public p { color:#475569; font-size:16px; max-width:420px; margin-bottom:32px; line-height:1.6; }
+  .med-emg-public p { color:#475569; font-size:15px; max-width:520px; margin:4px auto 10px; line-height:1.7; }
   .med-emg-public .big-btn { display:flex; align-items:center; justify-content:center; gap:12px; width:100%; max-width:400px; padding:24px; font-size:22px; font-weight:800; background:linear-gradient(135deg,#dc2626,#7f1d1d); color:#fff; border:none; border-radius:24px; box-shadow:0 15px 40px rgba(220,38,38,.4); cursor:pointer; transition:all .2s; }
   .med-emg-public .big-btn:hover { transform:translateY(-2px); box-shadow:0 20px 50px rgba(220,38,38,.5); }
   .med-emg-public .big-btn:active { transform:scale(.97); }
@@ -20474,17 +20475,13 @@ window.toggleInjuryPrintPreview = function(){
     <iframe id="medEmgAlertMap" style="width:100%; height:260px; border:0; border-radius:12px;" loading="lazy"></iframe>
     <div class="actions">
       <button class="med-emg-btn primary" onclick="medEmgOpenMap()"><i class="fas fa-map"></i> فتح الموقع</button>
-      <button class="med-emg-btn warn" onclick="medEmgStopSiren()"><i class="fas fa-volume-mute"></i> إيقاف الصوت</button>
       <button class="med-emg-btn secondary" onclick="medEmgAcknowledge()"><i class="fas fa-check"></i> تم الاستلام</button>
       <button class="med-emg-btn success" onclick="medEmgResolve()"><i class="fas fa-flag-checkered"></i> إنهاء الحالة</button>
     </div>
   </div>
 </div>
 
-<!-- Siren audio (looping ambulance) -->
-<audio id="medEmgSiren" loop preload="auto" crossorigin="anonymous">
-  <source src="https://cdn.jsdelivr.net/gh/anars/blank-audio@master/1-second-of-silence.mp3" type="audio/mpeg" />
-</audio>
+
 
 <script>
 (function(){
@@ -20533,15 +20530,19 @@ window.toggleInjuryPrintPreview = function(){
 
   function renderPublicEmergencyPage(){
     const workerRef = params.get('worker') || '';
-    document.title = 'طلب مساعدة طبية عاجلة';
+    document.title = 'طلب مساعدة طبية عاجلة / Medical Emergency / طبی ایمرجنسی';
     document.body.className = 'med-emg-public-page';
     document.body.innerHTML = `
       <div class="med-emg-public">
         <div class="icon-wrap"><i class="fas fa-truck-medical"></i></div>
-        <h1>طلب مساعدة طبية عاجلة</h1>
-        <p>إذا كنت بحاجة إلى المساعدة الطبية، اضغط الزر أدناه وسيتم إرسال موقعك الحالي إلى فريق الإسعاف.</p>
-        <button class="big-btn" id="medEmgPublicBtn">🚨 طلب المساعدة الطبية</button>
-        <div class="footer-note">لن يتم عرض أي معلومات شخصية عنك.</div>
+        <h1 dir="rtl">طلب مساعدة طبية عاجلة</h1>
+        <h2 dir="ltr" style="margin:6px 0 4px; font-size:22px; color:#7f1d1d;">Medical Emergency Request</h2>
+        <h2 dir="rtl" style="margin:0 0 14px; font-size:22px; color:#7f1d1d; font-family:'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif;">طبی ایمرجنسی درخواست</h2>
+        <p dir="rtl">إذا كنت بحاجة إلى المساعدة الطبية، اضغط الزر أدناه وسيتم إرسال موقعك الحالي إلى فريق الإسعاف.</p>
+        <p dir="ltr">If you need medical help, press the button below. Your current location will be sent to the medical team.</p>
+        <p dir="rtl" style="font-family:'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif;">اگر آپ کو طبی مدد کی ضرورت ہے، نیچے دیا گیا بٹن دبائیں۔ آپ کی موجودہ لوکیشن میڈیکل ٹیم کو بھیج دی جائے گی۔</p>
+        <button class="big-btn" id="medEmgPublicBtn">🚨 طلب المساعدة / Request Help / مدد طلب کریں</button>
+        <div class="footer-note" dir="rtl">لن يتم عرض أي معلومات شخصية عنك. · No personal information will be shown. · آپ کی کوئی ذاتی معلومات ظاہر نہیں کی جائے گی۔</div>
       </div>
       <!-- keep modals in body -->
       <div id="medEmgConfirmModal" class="modal-overlay"></div>
@@ -20556,22 +20557,26 @@ window.toggleInjuryPrintPreview = function(){
     const confirm = document.getElementById('medEmgConfirmModal');
     confirm.innerHTML = `
       <div class="med-emg-card" style="text-align:center;">
-        <h2 style="justify-content:center;"><i class="fas fa-map-marker-alt"></i> تأكيد الإرسال</h2>
-        <p style="color:#334155; line-height:1.7;">هل تريد إرسال طلب المساعدة الطبية مع موقعك الحالي؟</p>
+        <h2 style="justify-content:center;"><i class="fas fa-map-marker-alt"></i> تأكيد الإرسال / Confirm / تصدیق</h2>
+        <p dir="rtl" style="color:#334155; line-height:1.7;">هل تريد إرسال طلب المساعدة الطبية مع موقعك الحالي؟</p>
+        <p dir="ltr" style="color:#334155; line-height:1.6;">Send medical help request with your current location?</p>
+        <p dir="rtl" style="color:#334155; line-height:1.7; font-family:'Noto Nastaliq Urdu',serif;">کیا آپ اپنی موجودہ لوکیشن کے ساتھ طبی مدد کی درخواست بھیجنا چاہتے ہیں؟</p>
         <div id="medEmgConfirmCoords" style="background:#f1f5f9; padding:12px; border-radius:10px; margin:14px 0; font-size:13px; color:#334155;"></div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-          <button class="med-emg-btn secondary" onclick="document.getElementById('medEmgConfirmModal').classList.remove('show')">إلغاء</button>
-          <button class="med-emg-btn primary" id="medEmgConfirmSendBtn"><i class="fas fa-paper-plane"></i> إرسال</button>
+          <button class="med-emg-btn secondary" onclick="document.getElementById('medEmgConfirmModal').classList.remove('show')">إلغاء / Cancel / منسوخ</button>
+          <button class="med-emg-btn primary" id="medEmgConfirmSendBtn"><i class="fas fa-paper-plane"></i> إرسال / Send / بھیجیں</button>
         </div>
       </div>`;
     const success = document.getElementById('medEmgSuccessModal');
     success.innerHTML = `
       <div class="med-emg-card" style="text-align:center;">
         <div style="font-size:60px; color:#10b981;"><i class="fas fa-check-circle"></i></div>
-        <h2 style="color:#065f46; justify-content:center;">تم الإرسال بنجاح</h2>
-        <p style="color:#334155; line-height:1.8; margin:10px 0;">تم إرسال طلب المساعدة الطبية بنجاح.<br/>يرجى البقاء في مكانك حتى وصول فريق الإسعاف.</p>
+        <h2 style="color:#065f46; justify-content:center;">تم الإرسال بنجاح / Sent Successfully / کامیابی سے بھیج دیا</h2>
+        <p dir="rtl" style="color:#334155; line-height:1.8; margin:10px 0;">تم إرسال طلب المساعدة الطبية بنجاح.<br/>يرجى البقاء في مكانك حتى وصول فريق الإسعاف.</p>
+        <p dir="ltr" style="color:#334155; line-height:1.7; margin:10px 0;">Your medical help request was sent.<br/>Please stay where you are until the medical team arrives.</p>
+        <p dir="rtl" style="color:#334155; line-height:1.8; margin:10px 0; font-family:'Noto Nastaliq Urdu',serif;">آپ کی طبی مدد کی درخواست بھیج دی گئی ہے۔<br/>براہ کرم میڈیکل ٹیم کے پہنچنے تک اپنی جگہ پر رہیں۔</p>
         <div id="medEmgSuccessNumber" style="font-weight:700; color:#7f1d1d; margin:10px 0;"></div>
-        <button class="med-emg-btn success" onclick="document.getElementById('medEmgSuccessModal').classList.remove('show')">حسناً</button>
+        <button class="med-emg-btn success" onclick="document.getElementById('medEmgSuccessModal').classList.remove('show')">حسناً / OK / ٹھیک ہے</button>
       </div>`;
   }
 
@@ -20690,9 +20695,37 @@ window.toggleInjuryPrintPreview = function(){
   };
 
   // ================== NURSE DASHBOARD ==================
-  // Listens for new Active alerts and shows fullscreen overlay + siren.
+  // Listens for new Active alerts, shows fullscreen overlay + browser notification.
   let currentAlertId = null, currentAlert = null;
-  const siren = document.getElementById('medEmgSiren');
+
+  // Request browser notification permission early (needs a user gesture on some browsers)
+  function medEmgRequestNotifPermission(){
+    try {
+      if (!('Notification' in window)) return;
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().then(p => console.log('[MedEmg] notification permission:', p));
+      }
+    } catch(_){}
+  }
+  // Try immediately, and again on first user interaction (fallback for strict browsers)
+  medEmgRequestNotifPermission();
+  window.addEventListener('click', medEmgRequestNotifPermission, { once:true });
+
+  function medEmgShowBrowserNotif(id, alert){
+    try {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      const lat = Number(alert && alert.lat), lng = Number(alert && alert.lng);
+      const body = 'رقم البلاغ: ' + ((alert && alert.alertNumber) || id)
+        + (isFinite(lat) && isFinite(lng) ? ('\n📍 ' + lat.toFixed(5) + ', ' + lng.toFixed(5)) : '');
+      const n = new Notification('🚨 بلاغ طوارئ طبي جديد', {
+        body,
+        tag: 'medEmg-' + id,
+        requireInteraction: true,
+        icon: 'https://cdn-icons-png.flaticon.com/512/2966/2966327.png'
+      });
+      n.onclick = () => { try { window.focus(); } catch(_){} showNurseAlert(id, alert); n.close(); };
+    } catch(e){ console.warn('[MedEmg] browser notif failed', e); }
+  }
 
   function showNurseAlert(id, alert){
     try {
@@ -20723,21 +20756,20 @@ window.toggleInjuryPrintPreview = function(){
           <iframe id="medEmgAlertMap" style="width:100%; height:260px; border:0; border-radius:12px;" loading="lazy"></iframe>
           <div class="actions">
             <button class="med-emg-btn primary" onclick="medEmgOpenMap()"><i class="fas fa-map"></i> فتح الموقع</button>
-            <button class="med-emg-btn warn" onclick="medEmgStopSiren()"><i class="fas fa-volume-mute"></i> إيقاف الصوت</button>
             <button class="med-emg-btn secondary" onclick="medEmgAcknowledge()"><i class="fas fa-check"></i> تم الاستلام</button>
             <button class="med-emg-btn success" onclick="medEmgResolve()"><i class="fas fa-flag-checkered"></i> إنهاء الحالة</button>
           </div></div>`;
         document.body.appendChild(overlay);
       }
       overlay.classList.add('show');
-      try { if (siren){ siren.currentTime = 0; siren.play().catch(()=>{}); } } catch(_){ }
       try { if (navigator.vibrate) navigator.vibrate([400,150,400,150,400]); } catch(_){ }
+      medEmgShowBrowserNotif(id, alert);
     } catch(e){
       console.error('[MedEmg] showNurseAlert failed:', e);
     }
   }
 
-  window.medEmgStopSiren = function(){ try { siren.pause(); siren.currentTime = 0; } catch(_){} };
+  window.medEmgStopSiren = function(){ /* siren removed — kept as no-op for legacy calls */ };
   window.medEmgOpenMap = function(){ if (currentAlert) window.open(currentAlert.mapsUrl, '_blank'); };
   window.medEmgAcknowledge = function(){
     if (!currentAlertId) return;
