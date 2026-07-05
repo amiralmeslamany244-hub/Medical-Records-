@@ -20399,15 +20399,20 @@ window.toggleInjuryPrintPreview = function(){
 
   /* Public emergency page (full takeover) */
   body.med-emg-public-page { margin:0; padding:0; background:linear-gradient(135deg,#fef2f2 0%,#fee2e2 100%); font-family:'Inter',system-ui,-apple-system,sans-serif; min-height:100vh; }
-  .med-emg-public { min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; text-align:center; }
-  .med-emg-public .icon-wrap { width:140px; height:140px; border-radius:50%; background:linear-gradient(135deg,#dc2626,#7f1d1d); color:#fff; display:flex; align-items:center; justify-content:center; font-size:70px; box-shadow:0 20px 50px rgba(220,38,38,.4); margin-bottom:24px; animation:medEmgHeart 1.4s ease-in-out infinite; }
+  .med-emg-public { min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding:28px 18px 40px; text-align:center; }
+  .med-emg-public .icon-wrap { width:110px; height:110px; border-radius:50%; background:linear-gradient(135deg,#dc2626,#7f1d1d); color:#fff; display:flex; align-items:center; justify-content:center; font-size:56px; box-shadow:0 20px 50px rgba(220,38,38,.4); margin-bottom:18px; animation:medEmgHeart 1.4s ease-in-out infinite; }
   @keyframes medEmgHeart { 0%,100%{transform:scale(1);} 50%{transform:scale(1.08);} }
-  .med-emg-public h1 { color:#7f1d1d; font-size:32px; font-weight:800; margin-bottom:10px; }
-  .med-emg-public p { color:#475569; font-size:15px; max-width:520px; margin:4px auto 10px; line-height:1.7; }
-  .med-emg-public .big-btn { display:flex; align-items:center; justify-content:center; gap:12px; width:100%; max-width:400px; padding:24px; font-size:22px; font-weight:800; background:linear-gradient(135deg,#dc2626,#7f1d1d); color:#fff; border:none; border-radius:24px; box-shadow:0 15px 40px rgba(220,38,38,.4); cursor:pointer; transition:all .2s; }
+  .med-emg-public .title-stack { display:flex; flex-direction:column; gap:4px; margin-bottom:18px; }
+  .med-emg-public .title-stack h1 { color:#7f1d1d; font-size:26px; font-weight:800; margin:0; line-height:1.3; }
+  .med-emg-public .title-stack h2 { color:#991b1b; font-size:18px; font-weight:700; margin:0; }
+  .med-emg-public .lang-cards { display:grid; grid-template-columns:1fr; gap:10px; width:100%; max-width:440px; margin:0 auto 22px; }
+  .med-emg-public .lang-card { background:#fff; border:1px solid #fecaca; border-radius:14px; padding:14px 16px; text-align:start; box-shadow:0 4px 12px rgba(127,29,29,.06); }
+  .med-emg-public .lang-card .lang-tag { display:inline-block; font-size:11px; font-weight:700; color:#7f1d1d; background:#fee2e2; padding:2px 8px; border-radius:999px; letter-spacing:.5px; margin-bottom:6px; }
+  .med-emg-public .lang-card p { color:#334155; font-size:14px; line-height:1.7; margin:0; }
+  .med-emg-public .big-btn { display:flex; align-items:center; justify-content:center; gap:12px; width:100%; max-width:440px; padding:22px; font-size:19px; font-weight:800; background:linear-gradient(135deg,#dc2626,#7f1d1d); color:#fff; border:none; border-radius:20px; box-shadow:0 15px 40px rgba(220,38,38,.4); cursor:pointer; transition:all .2s; line-height:1.4; }
   .med-emg-public .big-btn:hover { transform:translateY(-2px); box-shadow:0 20px 50px rgba(220,38,38,.5); }
   .med-emg-public .big-btn:active { transform:scale(.97); }
-  .med-emg-public .footer-note { margin-top:24px; color:#64748b; font-size:12px; }
+  .med-emg-public .footer-note { margin-top:22px; color:#64748b; font-size:12px; max-width:440px; line-height:1.7; }
 
   /* History table */
   .med-emg-history { width:100%; border-collapse:collapse; margin-top:14px; font-size:13px; }
@@ -20468,15 +20473,15 @@ window.toggleInjuryPrintPreview = function(){
 </div>
 
 <!-- Nurse fullscreen alert -->
-<div id="medEmgNurseAlert">
+<div id="medEmgNurseAlert" dir="ltr">
   <div class="med-emg-alert-inner">
-    <h1><i class="fas fa-truck-medical"></i> بلاغ طوارئ طبي!</h1>
+    <h1><i class="fas fa-truck-medical"></i> New Medical Emergency Alert!</h1>
     <div class="meta" id="medEmgAlertMeta">Loading...</div>
     <iframe id="medEmgAlertMap" style="width:100%; height:260px; border:0; border-radius:12px;" loading="lazy"></iframe>
     <div class="actions">
-      <button class="med-emg-btn primary" onclick="medEmgOpenMap()"><i class="fas fa-map"></i> فتح الموقع</button>
-      <button class="med-emg-btn secondary" onclick="medEmgAcknowledge()"><i class="fas fa-check"></i> تم الاستلام</button>
-      <button class="med-emg-btn success" onclick="medEmgResolve()"><i class="fas fa-flag-checkered"></i> إنهاء الحالة</button>
+      <button class="med-emg-btn primary" onclick="medEmgOpenMap()"><i class="fas fa-map"></i> Open Location</button>
+      <button class="med-emg-btn secondary" onclick="medEmgAcknowledge()"><i class="fas fa-check"></i> Acknowledge</button>
+      <button class="med-emg-btn success" onclick="medEmgResolve()"><i class="fas fa-flag-checkered"></i> Resolve</button>
     </div>
   </div>
 </div>
@@ -20535,14 +20540,36 @@ window.toggleInjuryPrintPreview = function(){
     document.body.innerHTML = `
       <div class="med-emg-public">
         <div class="icon-wrap"><i class="fas fa-truck-medical"></i></div>
-        <h1 dir="rtl">طلب مساعدة طبية عاجلة</h1>
-        <h2 dir="ltr" style="margin:6px 0 4px; font-size:22px; color:#7f1d1d;">Medical Emergency Request</h2>
-        <h2 dir="rtl" style="margin:0 0 14px; font-size:22px; color:#7f1d1d; font-family:'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif;">طبی ایمرجنسی درخواست</h2>
-        <p dir="rtl">إذا كنت بحاجة إلى المساعدة الطبية، اضغط الزر أدناه وسيتم إرسال موقعك الحالي إلى فريق الإسعاف.</p>
-        <p dir="ltr">If you need medical help, press the button below. Your current location will be sent to the medical team.</p>
-        <p dir="rtl" style="font-family:'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif;">اگر آپ کو طبی مدد کی ضرورت ہے، نیچے دیا گیا بٹن دبائیں۔ آپ کی موجودہ لوکیشن میڈیکل ٹیم کو بھیج دی جائے گی۔</p>
-        <button class="big-btn" id="medEmgPublicBtn">🚨 طلب المساعدة / Request Help / مدد طلب کریں</button>
-        <div class="footer-note" dir="rtl">لن يتم عرض أي معلومات شخصية عنك. · No personal information will be shown. · آپ کی کوئی ذاتی معلومات ظاہر نہیں کی جائے گی۔</div>
+        <div class="title-stack">
+          <h1 dir="rtl">طلب مساعدة طبية عاجلة</h1>
+          <h2 dir="ltr">Medical Emergency Request</h2>
+          <h2 dir="rtl" style="font-family:'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif;">طبی ایمرجنسی درخواست</h2>
+        </div>
+
+        <div class="lang-cards">
+          <div class="lang-card" dir="rtl">
+            <span class="lang-tag">العربية</span>
+            <p>إذا كنت بحاجة إلى مساعدة طبية، اضغط الزر أدناه وسيتم إرسال موقعك الحالي إلى فريق الإسعاف فوراً.</p>
+          </div>
+          <div class="lang-card" dir="ltr">
+            <span class="lang-tag">ENGLISH</span>
+            <p>If you need medical help, press the button below. Your current location will be sent to the medical team immediately.</p>
+          </div>
+          <div class="lang-card" dir="rtl" style="font-family:'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif;">
+            <span class="lang-tag" style="font-family:'Inter',sans-serif;">اردو</span>
+            <p>اگر آپ کو طبی مدد کی ضرورت ہے، نیچے دیا گیا بٹن دبائیں۔ آپ کی موجودہ لوکیشن میڈیکل ٹیم کو فوراً بھیج دی جائے گی۔</p>
+          </div>
+        </div>
+
+        <button class="big-btn" id="medEmgPublicBtn">
+          <i class="fas fa-truck-medical"></i>
+          <span>طلب المساعدة · Request Help · مدد طلب کریں</span>
+        </button>
+        <div class="footer-note">
+          <div dir="rtl">لن يتم عرض أي معلومات شخصية عنك.</div>
+          <div dir="ltr">No personal information will be shown.</div>
+          <div dir="rtl" style="font-family:'Noto Nastaliq Urdu',serif;">آپ کی کوئی ذاتی معلومات ظاہر نہیں کی جائے گی۔</div>
+        </div>
       </div>
       <!-- keep modals in body -->
       <div id="medEmgConfirmModal" class="modal-overlay"></div>
@@ -20715,9 +20742,9 @@ window.toggleInjuryPrintPreview = function(){
     try {
       if (!('Notification' in window) || Notification.permission !== 'granted') return;
       const lat = Number(alert && alert.lat), lng = Number(alert && alert.lng);
-      const body = 'رقم البلاغ: ' + ((alert && alert.alertNumber) || id)
+      const body = 'Alert #: ' + ((alert && alert.alertNumber) || id)
         + (isFinite(lat) && isFinite(lng) ? ('\n📍 ' + lat.toFixed(5) + ', ' + lng.toFixed(5)) : '');
-      const n = new Notification('🚨 بلاغ طوارئ طبي جديد', {
+      const n = new Notification('🚨 New Medical Emergency Alert', {
         body,
         tag: 'medEmg-' + id,
         requireInteraction: true,
@@ -20739,10 +20766,10 @@ window.toggleInjuryPrintPreview = function(){
       const lngTxt = isFinite(lng) ? lng.toFixed(6) : '—';
       const mapsUrl = (alert && alert.mapsUrl) || (isFinite(lat) && isFinite(lng) ? ('https://www.google.com/maps?q=' + lat + ',' + lng) : '#');
       if (meta) meta.innerHTML = `
-        🔢 <b>رقم البلاغ:</b> ${(alert && alert.alertNumber) || id}<br/>
-        🕐 <b>الوقت:</b> ${t}<br/>
-        📍 <b>الإحداثيات:</b> ${latTxt}, ${lngTxt}<br/>
-        🗺️ <a href="${mapsUrl}" target="_blank" style="color:#0f4c75;">فتح على Google Maps</a>`;
+        🔢 <b>Alert #:</b> ${(alert && alert.alertNumber) || id}<br/>
+        🕐 <b>Time:</b> ${t}<br/>
+        📍 <b>Coordinates:</b> ${latTxt}, ${lngTxt}<br/>
+        🗺️ <a href="${mapsUrl}" target="_blank" style="color:#0f4c75;">Open in Google Maps</a>`;
       const iframe = document.getElementById('medEmgAlertMap');
       if (iframe && isFinite(lat) && isFinite(lng)) iframe.src = `https://maps.google.com/maps?q=${lat},${lng}&z=17&output=embed`;
       let overlay = document.getElementById('medEmgNurseAlert');
@@ -20750,26 +20777,65 @@ window.toggleInjuryPrintPreview = function(){
         console.warn('[MedEmg] overlay element missing, re-injecting');
         overlay = document.createElement('div');
         overlay.id = 'medEmgNurseAlert';
+        overlay.setAttribute('dir','ltr');
         overlay.innerHTML = `<div class="med-emg-alert-inner">
-          <h1><i class="fas fa-truck-medical"></i> بلاغ طوارئ طبي!</h1>
+          <h1><i class="fas fa-truck-medical"></i> New Medical Emergency Alert!</h1>
           <div class="meta" id="medEmgAlertMeta">${meta ? meta.innerHTML : ''}</div>
           <iframe id="medEmgAlertMap" style="width:100%; height:260px; border:0; border-radius:12px;" loading="lazy"></iframe>
           <div class="actions">
-            <button class="med-emg-btn primary" onclick="medEmgOpenMap()"><i class="fas fa-map"></i> فتح الموقع</button>
-            <button class="med-emg-btn secondary" onclick="medEmgAcknowledge()"><i class="fas fa-check"></i> تم الاستلام</button>
-            <button class="med-emg-btn success" onclick="medEmgResolve()"><i class="fas fa-flag-checkered"></i> إنهاء الحالة</button>
+            <button class="med-emg-btn primary" onclick="medEmgOpenMap()"><i class="fas fa-map"></i> Open Location</button>
+            <button class="med-emg-btn secondary" onclick="medEmgAcknowledge()"><i class="fas fa-check"></i> Acknowledge</button>
+            <button class="med-emg-btn success" onclick="medEmgResolve()"><i class="fas fa-flag-checkered"></i> Resolve</button>
           </div></div>`;
         document.body.appendChild(overlay);
       }
       overlay.classList.add('show');
-      try { if (navigator.vibrate) navigator.vibrate([400,150,400,150,400]); } catch(_){ }
+      try { if (navigator.vibrate) navigator.vibrate([400,150,400,150,400,150,400]); } catch(_){ }
+      try { medEmgStartSiren(); } catch(e){ console.warn('[MedEmg] siren failed', e); }
       medEmgShowBrowserNotif(id, alert);
     } catch(e){
       console.error('[MedEmg] showNurseAlert failed:', e);
     }
   }
 
-  window.medEmgStopSiren = function(){ /* siren removed — kept as no-op for legacy calls */ };
+  // ============ AMBULANCE SIREN (Web Audio, no asset needed) ============
+  let medEmgAudioCtx = null, medEmgSirenTimer = null, medEmgSirenOsc = null, medEmgSirenGain = null;
+  function medEmgStartSiren(){
+    medEmgStopSiren();
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!medEmgAudioCtx) medEmgAudioCtx = new AC();
+    if (medEmgAudioCtx.state === 'suspended') { try { medEmgAudioCtx.resume(); } catch(_){} }
+    const ctx = medEmgAudioCtx;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.value = 750;
+    gain.gain.value = 0.18;
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    medEmgSirenOsc = osc; medEmgSirenGain = gain;
+    // Two-tone ambulance wail: alternate 750Hz <-> 1100Hz every 550ms
+    let high = false;
+    medEmgSirenTimer = setInterval(() => {
+      high = !high;
+      try { osc.frequency.setTargetAtTime(high ? 1100 : 750, ctx.currentTime, 0.08); } catch(_){}
+    }, 550);
+  }
+  window.medEmgStopSiren = function(){
+    if (medEmgSirenTimer){ clearInterval(medEmgSirenTimer); medEmgSirenTimer = null; }
+    if (medEmgSirenOsc){ try { medEmgSirenOsc.stop(); } catch(_){} try { medEmgSirenOsc.disconnect(); } catch(_){} medEmgSirenOsc = null; }
+    if (medEmgSirenGain){ try { medEmgSirenGain.disconnect(); } catch(_){} medEmgSirenGain = null; }
+  };
+  // Unlock audio on first user gesture (browsers require it before playback)
+  window.addEventListener('click', () => {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      if (!medEmgAudioCtx) medEmgAudioCtx = new AC();
+      if (medEmgAudioCtx.state === 'suspended') medEmgAudioCtx.resume();
+    } catch(_){}
+  }, { once:true });
   window.medEmgOpenMap = function(){ if (currentAlert) window.open(currentAlert.mapsUrl, '_blank'); };
   window.medEmgAcknowledge = function(){
     if (!currentAlertId) return;
