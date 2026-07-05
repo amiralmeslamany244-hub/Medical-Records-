@@ -6726,7 +6726,7 @@ window.YMCO_showSplash = function(){
                 <button class="btn" onclick="openQrScanner()" title="Scan worker QR code to open file" style="background:linear-gradient(135deg,#16a34a,#15803d);min-width:120px;"><i class="fas fa-qrcode"></i> Scan QR</button>
                 <button class="btn" onclick="openMonthlyInjuryReport()" title="Generate monthly injury report (PDF)" style="background:linear-gradient(135deg,#dc2626,#991b1b);min-width:120px;"><i class="fas fa-file-medical-alt"></i> Monthly Injury Report</button>
                 <button class="btn" onclick="openEmergencyQRModal()" title="Generate Smart Emergency QR for a worker" style="background:linear-gradient(135deg,#ea580c,#b91c1c);min-width:120px;"><i class="fas fa-ambulance"></i> Smart Emergency QR</button>
-                 <button class="btn" onclick="openMedicalEmergencyQRModal()" title="Public medical help request QR (no worker data shown)" style="background:linear-gradient(135deg,#dc2626,#7f1d1d);min-width:120px;"><i class="fas fa-truck-medical"></i> Medical Emergency QR</button>
+                 <button class="btn perm-medical_emergency_qr" onclick="openMedicalEmergencyQRModal()" title="Public medical help request QR (no worker data shown)" style="background:linear-gradient(135deg,#dc2626,#7f1d1d);min-width:120px;"><i class="fas fa-truck-medical"></i> Medical Emergency QR</button>
             </div>
             <div class="workers-grid" id="workersGrid"></div>
         </div>
@@ -17700,10 +17700,10 @@ window.toggleInjuryPrintPreview = function(){
 
   // ---------- Permissions matrix ----------
   const PERMS = {
-    admin:              ['view','create','edit','delete','export','manage_users','view_reports','export_json','import_json','cloud_backup','cloud_restore','sign_injury','sign_clinic'],
-    head_of_hse:        ['view','create','edit','export','view_reports','sign_injury','sign_clinic'],
-    safety_manager:     ['view','create','edit','export','view_reports','sign_injury','sign_clinic'],
-    safety_supervisor:  ['view','create'],
+    admin:              ['view','create','edit','delete','export','manage_users','view_reports','export_json','import_json','cloud_backup','cloud_restore','sign_injury','sign_clinic','medical_emergency_qr'],
+    head_of_hse:        ['view','create','edit','export','view_reports','sign_injury','sign_clinic','medical_emergency_qr'],
+    safety_manager:     ['view','create','edit','export','view_reports','sign_injury','sign_clinic','medical_emergency_qr'],
+    safety_supervisor:  ['view','create','medical_emergency_qr'],
     pending:            []
   };
   const ROLE_LABELS = {
@@ -17727,14 +17727,15 @@ window.toggleInjuryPrintPreview = function(){
     }
     return (PERMS[currentUserRole] || []).includes(action);
   };
-  window.ALL_PERMS = ['view','create','edit','delete','export','manage_users','view_reports','export_json','import_json','cloud_backup','cloud_restore','sign_injury','sign_clinic'];
+  window.ALL_PERMS = ['view','create','edit','delete','export','manage_users','view_reports','export_json','import_json','cloud_backup','cloud_restore','sign_injury','sign_clinic','medical_emergency_qr'];
   window.PERM_LABELS = {
     view:'View records', create:'Create records', edit:'Edit records',
     delete:'Delete records', export:'Export / print', manage_users:'Manage users',
     view_reports:'View reports',
     export_json:'Export JSON', import_json:'Import JSON',
     cloud_backup:'Backup to Cloud', cloud_restore:'Restore from Cloud',
-    sign_injury:'Sign Injury Report', sign_clinic:'Sign Site Clinic Report'
+    sign_injury:'Sign Injury Report', sign_clinic:'Sign Site Clinic Report',
+    medical_emergency_qr:'Medical Emergency QR'
   };
   window.getCurrentUser = () => currentUser;
   window.getCurrentRole = () => currentUserRole;
@@ -17796,6 +17797,10 @@ window.toggleInjuryPrintPreview = function(){
     export: {
       selectors: ['.btn-print-worker','.btn-print-exam'],
       onclickKeywords: ['openExportModal','previewExportData','confirmExportAll','printAllWorkerIdCards','printPhysicalReport','printClinicReport','printInjuryReport','previewPhysicalPDF','previewClinicPDF','previewInjuryPDF','window.print','exportTo','downloadPdf']
+    },
+    medical_emergency_qr: {
+      selectors: ['.perm-medical_emergency_qr'],
+      onclickKeywords: ['openMedicalEmergencyQRModal']
     }
   };
 
@@ -17808,7 +17813,7 @@ window.toggleInjuryPrintPreview = function(){
 
   function applyPermissionsToDOM(){
     // Legacy perm-<action> class support
-    ['delete','edit','export','manage_users','create','view_reports','export_json','import_json','cloud_backup','cloud_restore','sign_injury','sign_clinic'].forEach(act => {
+    ['delete','edit','export','manage_users','create','view_reports','export_json','import_json','cloud_backup','cloud_restore','sign_injury','sign_clinic','medical_emergency_qr'].forEach(act => {
       document.querySelectorAll('.perm-'+act).forEach(el => {
         el.style.display = hasPermission(act) ? '' : 'none';
       });
@@ -20870,7 +20875,8 @@ window.toggleInjuryPrintPreview = function(){
       nurseAttached = true;
       console.log('[MedEmg] attaching nurse listener');
       try {
-        db.ref('emergency_alerts').limitToLast(50).on(
+        const __medEmgSince = Date.now();
+        db.ref('emergency_alerts').orderByChild('createdAt').startAt(__medEmgSince).on(
           'child_added',
           snap => handleIncoming(snap.key, snap.val()),
           err => {
