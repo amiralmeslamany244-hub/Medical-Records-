@@ -20633,6 +20633,8 @@ window.toggleInjuryPrintPreview = function(){
       </div>
       <!-- keep modals in body -->
       <div id="medEmgConfirmModal" class="modal-overlay"></div>
+      <div id="medEmgCountdownModal" class="modal-overlay"></div>
+      <div id="medEmgCancelledModal" class="modal-overlay"></div>
       <div id="medEmgSuccessModal" class="modal-overlay"></div>
     `;
     injectPublicModals();
@@ -20723,7 +20725,137 @@ window.toggleInjuryPrintPreview = function(){
         <div id="medEmgSuccessNumber" style="font-weight:700; color:#7f1d1d; margin:10px 0;"></div>
         <button class="med-emg-btn success" onclick="document.getElementById('medEmgSuccessModal').classList.remove('show')">حسناً / OK / ٹھیک ہے</button>
       </div>`;
+
+    // ===== False Alarm countdown modal =====
+    const countdown = document.getElementById('medEmgCountdownModal');
+    countdown.innerHTML = `
+      <div class="med-emg-card" style="text-align:center; max-width:440px; animation:medEmgPop .35s cubic-bezier(.2,.9,.3,1.2);">
+        <div style="font-size:44px; color:#dc2626; margin-bottom:6px;"><i class="fas fa-triangle-exclamation"></i></div>
+        <h2 style="justify-content:center; color:#7f1d1d;">تأكيد إرسال البلاغ</h2>
+        <p dir="rtl" style="color:#334155; line-height:1.7; margin:4px 0 6px;">🚨 سيتم إرسال طلب المساعدة الطبية خلال:</p>
+        <p dir="ltr" style="color:#64748b; font-size:13px; margin:0 0 14px;">Sending medical help request in:</p>
+        <div id="medEmgCountdownNum" style="font-size:96px; font-weight:900; color:#dc2626; line-height:1; margin:10px 0 6px; text-shadow:0 6px 18px rgba(220,38,38,.25); transition:transform .2s ease;">10</div>
+        <div style="height:8px; background:#fee2e2; border-radius:999px; overflow:hidden; margin:8px 0 18px;">
+          <div id="medEmgCountdownBar" style="height:100%; width:100%; background:linear-gradient(90deg,#dc2626,#ef4444); transition:width 1s linear;"></div>
+        </div>
+        <p dir="rtl" style="color:#64748b; font-size:13px; margin:0 0 14px;">إذا كان الضغط عن طريق الخطأ، اضغط <b style="color:#f97316;">False Alarm</b> لإلغاء البلاغ.</p>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <button class="med-emg-btn" id="medEmgFalseAlarmBtn" style="background:linear-gradient(135deg,#f97316,#c2410c); color:#fff;"><i class="fas fa-ban"></i> False Alarm<br/><span style="font-size:11px; font-weight:600; opacity:.9;">إلغاء البلاغ</span></button>
+          <button class="med-emg-btn" id="medEmgSendNowBtn" style="background:linear-gradient(135deg,#059669,#065f46); color:#fff;"><i class="fas fa-paper-plane"></i> إرسال الآن<br/><span style="font-size:11px; font-weight:600; opacity:.9;">Send Now</span></button>
+        </div>
+      </div>`;
+
+    // ===== Cancelled (False Alarm success) modal =====
+    const cancelled = document.getElementById('medEmgCancelledModal');
+    cancelled.innerHTML = `
+      <div class="med-emg-card" style="text-align:center; max-width:440px;">
+        <div style="font-size:60px; color:#f97316;"><i class="fas fa-shield-halved"></i></div>
+        <h2 style="justify-content:center; color:#9a3412;">تم إلغاء البلاغ</h2>
+        <p dir="rtl" style="color:#334155; line-height:1.8; margin:10px 0;">تم إلغاء البلاغ بنجاح.<br/>لم يتم إرسال أي طلب مساعدة طبية.</p>
+        <p dir="ltr" style="color:#64748b; line-height:1.6; margin:6px 0 14px;">The report was cancelled. No medical help request was sent.</p>
+        <button class="med-emg-btn" style="background:linear-gradient(135deg,#f97316,#c2410c); color:#fff;" onclick="document.getElementById('medEmgCancelledModal').classList.remove('show')">حسناً / OK</button>
+      </div>`;
   }
+
+  // ===== Audit event logger (False Alarm / countdown_sent / send_now) =====
+  function medEmgLogEvent(evt){
+    try {
+      const payload = Object.assign({
+        createdAt: Date.now(),
+        createdAtISO: new Date().toISOString(),
+        userAgent: (navigator && navigator.userAgent) || ''
+      }, evt || {});
+      if (typeof db !== 'undefined' && db){
+        db.ref('emergency_events').push().set(payload).catch(()=>{});
+      } else {
+        try {
+          const key = 'medEmgEvents';
+          const arr = JSON.parse(localStorage.getItem(key) || '[]');
+          arr.push(payload);
+          localStorage.setItem(key, JSON.stringify(arr));
+        } catch(_){}
+      }
+    } catch(_){}
+  }
+  window.medEmgLogEvent = medEmgLogEvent;
+
+  // ===== False Alarm countdown state =====
+  let medEmgCountdownTimer = null;
+  function medEmgStopVibration(){ try { if (navigator.vibrate) navigator.vibrate(0); } catch(_){} }
+  function medEmgClearCountdown(){
+    if (medEmgCountdownTimer){ clearInterval(medEmgCountdownTimer); medEmgCountdownTimer = null; }
+    medEmgStopVibration();
+  }
+  window.medEmgStartCountdown = function(){
+    if (!pendingPayload) return;
+    document.getElementById('medEmgConfirmModal').classList.remove('show');
+    const modal = document.getElementById('medEmgCountdownModal');
+    const numEl = document.getElementById('medEmgCountdownNum');
+    const barEl = document.getElementById('medEmgCountdownBar');
+    let remaining = 10;
+    numEl.textContent = remaining;
+    barEl.style.transition = 'none';
+    barEl.style.width = '100%';
+    // Force reflow so next transition applies
+    void barEl.offsetWidth;
+    barEl.style.transition = 'width 1s linear';
+    modal.classList.add('show');
+    try { if (navigator.vibrate) navigator.vibrate([80,60,80]); } catch(_){}
+
+    const tick = () => {
+      remaining--;
+      if (remaining <= 0){
+        medEmgClearCountdown();
+        modal.classList.remove('show');
+        window.__medEmgSendSource = 'countdown_expired';
+        medEmgConfirmSend();
+        return;
+      }
+      numEl.textContent = remaining;
+      numEl.style.transform = 'scale(1.15)';
+      setTimeout(() => { numEl.style.transform = 'scale(1)'; }, 150);
+      barEl.style.width = (remaining * 10) + '%';
+    };
+    medEmgCountdownTimer = setInterval(tick, 1000);
+    // start bar animation
+    requestAnimationFrame(() => { barEl.style.width = '90%'; });
+
+    document.getElementById('medEmgSendNowBtn').onclick = () => {
+      medEmgClearCountdown();
+      modal.classList.remove('show');
+      window.__medEmgSendSource = 'send_now';
+      medEmgConfirmSend();
+    };
+    document.getElementById('medEmgFalseAlarmBtn').onclick = () => {
+      medEmgClearCountdown();
+      modal.classList.remove('show');
+      const r = (pendingPayload && pendingPayload.reporter) || null;
+      const fLoc = (pendingPayload && pendingPayload.location) || {};
+      medEmgLogEvent({
+        type: 'false_alarm',
+        triggerSource: 'false_alarm',
+        lat: pendingPayload ? pendingPayload.lat : null,
+        lng: pendingPayload ? pendingPayload.lng : null,
+        latitude: fLoc.latitude != null ? fLoc.latitude : (pendingPayload ? pendingPayload.lat : null),
+        longitude: fLoc.longitude != null ? fLoc.longitude : (pendingPayload ? pendingPayload.lng : null),
+        accuracyMeters: fLoc.accuracyMeters != null ? fLoc.accuracyMeters : null,
+        altitudeMeters: fLoc.altitudeMeters != null ? fLoc.altitudeMeters : null,
+        altitudeAccuracyMeters: fLoc.altitudeAccuracyMeters != null ? fLoc.altitudeAccuracyMeters : null,
+        headingDegrees: fLoc.headingDegrees != null ? fLoc.headingDegrees : null,
+        speedMps: fLoc.speedMps != null ? fLoc.speedMps : null,
+        locationTimestamp: fLoc.locationTimestamp || null,
+        locationTimestampISO: fLoc.locationTimestampISO || null,
+        mapsUrl: pendingPayload ? pendingPayload.mapsUrl : null,
+        location: fLoc,
+        reporterIqama: r ? (r.id || '') : '',
+        reporterName: r && !r.unmatched ? (r.name || '') : '',
+        workerRef: pendingPayload ? pendingPayload.workerRef : ''
+      });
+      pendingPayload = null;
+      const c = document.getElementById('medEmgCancelledModal');
+      if (c) c.classList.add('show');
+    };
+  };
 
   // ================== PUBLIC FLOW: request help ==================
   let pendingPayload = null;
@@ -20739,7 +20871,26 @@ window.toggleInjuryPrintPreview = function(){
       const lat = pos.coords.latitude, lng = pos.coords.longitude;
       const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
       const reporter = (window.__medEmgReporter && typeof window.__medEmgReporter === 'object') ? window.__medEmgReporter : null;
-      pendingPayload = { lat, lng, mapsUrl, workerRef: workerRef || (reporter && reporter.id) || 'anonymous', accuracy: pos.coords.accuracy, reporter: reporter };
+      const c = pos.coords || {};
+      pendingPayload = {
+        lat, lng, mapsUrl,
+        workerRef: workerRef || (reporter && reporter.id) || 'anonymous',
+        reporter: reporter,
+        location: {
+          latitude: lat,
+          longitude: lng,
+          accuracyMeters: (typeof c.accuracy === 'number') ? c.accuracy : null,
+          altitudeMeters: (typeof c.altitude === 'number') ? c.altitude : null,
+          altitudeAccuracyMeters: (typeof c.altitudeAccuracy === 'number') ? c.altitudeAccuracy : null,
+          headingDegrees: (typeof c.heading === 'number') ? c.heading : null,
+          speedMps: (typeof c.speed === 'number') ? c.speed : null,
+          locationTimestamp: pos.timestamp || null,
+          locationTimestampISO: pos.timestamp ? new Date(pos.timestamp).toISOString() : null,
+          mapsUrl: mapsUrl,
+          source: 'browser_geolocation'
+        },
+        accuracy: c.accuracy
+      };
       const coordsBox = document.getElementById('medEmgConfirmCoords');
       if (coordsBox){
         const esc = window.__medEmgEscape || (s => String(s));
@@ -20759,7 +20910,7 @@ window.toggleInjuryPrintPreview = function(){
       const modal = document.getElementById('medEmgConfirmModal');
       modal.classList.add('show');
       const sendBtn = document.getElementById('medEmgConfirmSendBtn');
-      if (sendBtn) sendBtn.onclick = medEmgConfirmSend;
+      if (sendBtn) sendBtn.onclick = window.medEmgStartCountdown;
     }, err => {
       if (btn){ btn.disabled = false; restoreBtn(); }
       alert('تعذّر تحديد الموقع: ' + err.message + '\nيرجى السماح بالوصول للموقع.');
@@ -20772,10 +20923,21 @@ window.toggleInjuryPrintPreview = function(){
     const alertNumber = 'ME-' + Date.now().toString(36).toUpperCase();
     const now = Date.now();
     const r = pendingPayload.reporter || null;
+    const loc = pendingPayload.location || {};
     const record = {
       alertNumber,
       lat: pendingPayload.lat,
       lng: pendingPayload.lng,
+      latitude: loc.latitude != null ? loc.latitude : pendingPayload.lat,
+      longitude: loc.longitude != null ? loc.longitude : pendingPayload.lng,
+      accuracyMeters: loc.accuracyMeters != null ? loc.accuracyMeters : (pendingPayload.accuracy || null),
+      altitudeMeters: loc.altitudeMeters != null ? loc.altitudeMeters : null,
+      altitudeAccuracyMeters: loc.altitudeAccuracyMeters != null ? loc.altitudeAccuracyMeters : null,
+      headingDegrees: loc.headingDegrees != null ? loc.headingDegrees : null,
+      speedMps: loc.speedMps != null ? loc.speedMps : null,
+      locationTimestamp: loc.locationTimestamp || null,
+      locationTimestampISO: loc.locationTimestampISO || null,
+      location: loc,
       mapsUrl: pendingPayload.mapsUrl,
       accuracy: pendingPayload.accuracy,
       workerRef: pendingPayload.workerRef,
@@ -20787,6 +20949,7 @@ window.toggleInjuryPrintPreview = function(){
       reporterPhone: r && !r.unmatched ? (r.phone || '') : '',
       reporterMatched: !!(r && !r.unmatched && r.name),
       status: 'Active',
+      triggerSource: (window.__medEmgSendSource || 'manual'),
       createdAt: now,
       createdAtISO: new Date(now).toISOString(),
       acknowledgedAt: null,
@@ -20800,6 +20963,27 @@ window.toggleInjuryPrintPreview = function(){
       if (numEl) numEl.textContent = 'رقم البلاغ: ' + alertNumber;
       succ.classList.add('show');
       if (navigator.vibrate) navigator.vibrate([200,100,200,100,400]);
+      medEmgLogEvent({
+        type: 'sent',
+        triggerSource: window.__medEmgSendSource || 'manual',
+        alertNumber: alertNumber,
+        alertId: id || null,
+        lat: record.lat, lng: record.lng,
+        latitude: record.latitude,
+        longitude: record.longitude,
+        accuracyMeters: record.accuracyMeters,
+        altitudeMeters: record.altitudeMeters,
+        altitudeAccuracyMeters: record.altitudeAccuracyMeters,
+        headingDegrees: record.headingDegrees,
+        speedMps: record.speedMps,
+        locationTimestamp: record.locationTimestamp,
+        locationTimestampISO: record.locationTimestampISO,
+        mapsUrl: record.mapsUrl,
+        location: record.location,
+        reporterIqama: record.reporterIqama || '',
+        reporterName: record.reporterName || ''
+      });
+      window.__medEmgSendSource = null;
       pendingPayload = null;
     };
     if (db){
