@@ -20403,21 +20403,53 @@ window.toggleInjuryPrintPreview = function(){
   .med-emg-alert-inner .actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
 
   /* Public emergency page (full takeover) */
-  body.med-emg-public-page { margin:0; padding:0; background:linear-gradient(135deg,#fef2f2 0%,#fee2e2 100%); font-family:'Inter',system-ui,-apple-system,sans-serif; min-height:100vh; }
-  .med-emg-public { min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding:28px 18px 40px; text-align:center; }
-  .med-emg-public .icon-wrap { width:110px; height:110px; border-radius:50%; background:linear-gradient(135deg,#dc2626,#7f1d1d); color:#fff; display:flex; align-items:center; justify-content:center; font-size:56px; box-shadow:0 20px 50px rgba(220,38,38,.4); margin-bottom:18px; animation:medEmgHeart 1.4s ease-in-out infinite; }
+  body.med-emg-public-page { margin:0; padding:0; background:linear-gradient(135deg,#fff1f2 0%,#fee2e2 55%,#fecaca 100%); font-family:'Inter',system-ui,-apple-system,sans-serif; min-height:100vh; }
+  .med-emg-public { min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding:24px 16px 48px; text-align:center; }
+  .med-emg-public .brand-bar { display:inline-flex; align-items:center; justify-content:center; gap:8px; font-size:12px; font-weight:700; letter-spacing:1px; color:#7f1d1d; background:#fff; padding:8px 16px; border-radius:999px; box-shadow:0 4px 14px rgba(127,29,29,.08); margin-bottom:16px; border:1px solid #fecaca; }
+  .med-emg-public .brand-bar .dot { width:8px; height:8px; border-radius:50%; background:#dc2626; animation:medEmgBlink 1s infinite; }
+  @keyframes medEmgBlink { 0%,100%{opacity:1;} 50%{opacity:.25;} }
+  .med-emg-public .icon-wrap { width:104px; height:104px; border-radius:50%; background:linear-gradient(135deg,#ef4444,#7f1d1d); color:#fff; display:flex; align-items:center; justify-content:center; font-size:52px; box-shadow:0 20px 50px rgba(220,38,38,.4), inset 0 -6px 20px rgba(0,0,0,.15); margin-bottom:14px; animation:medEmgHeart 1.4s ease-in-out infinite; }
   @keyframes medEmgHeart { 0%,100%{transform:scale(1);} 50%{transform:scale(1.08);} }
   .med-emg-public .title-stack { display:flex; flex-direction:column; gap:4px; margin-bottom:18px; }
-  .med-emg-public .title-stack h1 { color:#7f1d1d; font-size:26px; font-weight:800; margin:0; line-height:1.3; }
-  .med-emg-public .title-stack h2 { color:#991b1b; font-size:18px; font-weight:700; margin:0; }
-  .med-emg-public .lang-cards { display:grid; grid-template-columns:1fr; gap:10px; width:100%; max-width:440px; margin:0 auto 22px; }
-  .med-emg-public .lang-card { background:#fff; border:1px solid #fecaca; border-radius:14px; padding:14px 16px; text-align:start; box-shadow:0 4px 12px rgba(127,29,29,.06); }
-  .med-emg-public .lang-card .lang-tag { display:inline-block; font-size:11px; font-weight:700; color:#7f1d1d; background:#fee2e2; padding:2px 8px; border-radius:999px; letter-spacing:.5px; margin-bottom:6px; }
+  .med-emg-public .title-stack h1 { color:#7f1d1d; font-size:24px; font-weight:800; margin:0; line-height:1.3; letter-spacing:-.5px; }
+  .med-emg-public .title-stack h2 { color:#991b1b; font-size:16px; font-weight:700; margin:0; opacity:.9; }
+  .med-emg-public .panel { background:#fff; border-radius:22px; padding:18px 16px; width:100%; max-width:460px; box-shadow:0 12px 32px rgba(127,29,29,.10); border:1px solid #fecaca; margin-bottom:14px; text-align:start; }
+  .med-emg-public .panel-title { display:flex; align-items:center; gap:8px; font-size:12px; font-weight:800; color:#7f1d1d; margin-bottom:12px; text-transform:uppercase; letter-spacing:.6px; }
+  .med-emg-public .panel-title i { color:#dc2626; }
+  .med-emg-public .panel-title .opt-tag { margin-inline-start:auto; font-size:10px; font-weight:700; color:#64748b; background:#f1f5f9; padding:3px 8px; border-radius:999px; letter-spacing:.3px; text-transform:none; }
+  .med-emg-public .lang-cards { display:flex; flex-direction:column; gap:8px; }
+  .med-emg-public .lang-card { background:#fef2f2; border:1px solid #fecaca; border-radius:12px; padding:12px 14px; text-align:start; }
+  .med-emg-public .lang-card .lang-tag { display:inline-block; font-size:10px; font-weight:800; color:#fff; background:linear-gradient(135deg,#dc2626,#7f1d1d); padding:3px 10px; border-radius:999px; letter-spacing:.8px; margin-bottom:6px; }
   .med-emg-public .lang-card p { color:#334155; font-size:14px; line-height:1.7; margin:0; }
-  .med-emg-public .big-btn { display:flex; align-items:center; justify-content:center; gap:12px; width:100%; max-width:440px; padding:22px; font-size:19px; font-weight:800; background:linear-gradient(135deg,#dc2626,#7f1d1d); color:#fff; border:none; border-radius:20px; box-shadow:0 15px 40px rgba(220,38,38,.4); cursor:pointer; transition:all .2s; line-height:1.4; }
-  .med-emg-public .big-btn:hover { transform:translateY(-2px); box-shadow:0 20px 50px rgba(220,38,38,.5); }
-  .med-emg-public .big-btn:active { transform:scale(.97); }
-  .med-emg-public .footer-note { margin-top:22px; color:#64748b; font-size:12px; max-width:440px; line-height:1.7; }
+
+  /* Reporter Iqama field */
+  .med-emg-public .iqama-field { display:flex; align-items:center; background:#f8fafc; border:1.5px solid #e2e8f0; border-radius:14px; padding:2px 6px 2px 14px; transition:all .2s; }
+  .med-emg-public .iqama-field:focus-within { border-color:#dc2626; background:#fff; box-shadow:0 0 0 4px rgba(220,38,38,.08); }
+  .med-emg-public .iqama-field i.icn { color:#94a3b8; font-size:15px; margin-inline-end:8px; }
+  .med-emg-public .iqama-field input { flex:1; border:none; background:transparent; outline:none; padding:12px 4px; font-size:15px; font-weight:600; color:#0f172a; letter-spacing:.5px; font-family:inherit; direction:ltr; text-align:start; min-width:0; }
+  .med-emg-public .iqama-field input::placeholder { color:#94a3b8; font-weight:500; letter-spacing:0; }
+  .med-emg-public .iqama-hint { font-size:11.5px; color:#64748b; margin-top:8px; line-height:1.6; display:flex; align-items:flex-start; gap:6px; }
+  .med-emg-public .iqama-hint i { color:#3282b8; margin-top:2px; }
+  .med-emg-public .reporter-result { margin-top:12px; padding:12px 14px; border-radius:14px; font-size:13.5px; line-height:1.6; display:none; animation:medEmgFade .3s ease; }
+  .med-emg-public .reporter-result.found { display:block; background:linear-gradient(135deg,#ecfdf5,#d1fae5); border:1px solid #a7f3d0; color:#065f46; }
+  .med-emg-public .reporter-result.notfound { display:block; background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; }
+  .med-emg-public .reporter-result .r-name { font-weight:800; font-size:15px; color:#064e3b; margin-bottom:4px; display:flex; align-items:center; gap:6px; }
+  .med-emg-public .reporter-result .r-meta { display:grid; grid-template-columns:auto 1fr; gap:4px 10px; font-size:12.5px; margin-top:6px; }
+  .med-emg-public .reporter-result .r-meta b { color:#047857; font-weight:700; }
+  @keyframes medEmgFade { from{opacity:0; transform:translateY(-4px);} to{opacity:1; transform:none;} }
+
+  /* Professional report button */
+  .med-emg-public .cta-wrap { width:100%; max-width:460px; position:relative; margin-top:6px; }
+  .med-emg-public .cta-wrap::before { content:""; position:absolute; inset:-6px; border-radius:26px; background:linear-gradient(135deg,#dc2626,#7f1d1d); filter:blur(18px); opacity:.45; z-index:0; animation:medEmgGlow 2.4s ease-in-out infinite; pointer-events:none; }
+  @keyframes medEmgGlow { 0%,100%{opacity:.4;} 50%{opacity:.7;} }
+  .med-emg-public .big-btn { position:relative; z-index:1; display:flex; align-items:center; justify-content:center; gap:14px; width:100%; padding:22px 20px; font-size:18px; font-weight:800; background:linear-gradient(135deg,#ef4444 0%,#dc2626 55%,#7f1d1d 100%); color:#fff; border:none; border-radius:22px; box-shadow:0 18px 42px rgba(220,38,38,.45), inset 0 1px 0 rgba(255,255,255,.25), inset 0 -3px 12px rgba(0,0,0,.15); cursor:pointer; transition:all .2s cubic-bezier(.4,0,.2,1); line-height:1.35; font-family:inherit; letter-spacing:.2px; }
+  .med-emg-public .big-btn:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 24px 55px rgba(220,38,38,.55), inset 0 1px 0 rgba(255,255,255,.3); }
+  .med-emg-public .big-btn:active:not(:disabled) { transform:scale(.98) translateY(0); }
+  .med-emg-public .big-btn:disabled { opacity:.75; cursor:progress; }
+  .med-emg-public .big-btn .btn-icon { width:44px; height:44px; border-radius:50%; background:rgba(255,255,255,.2); display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; }
+  .med-emg-public .big-btn .btn-txt { flex:1; text-align:center; }
+  .med-emg-public .footer-note { margin-top:24px; color:#64748b; font-size:12px; max-width:460px; line-height:1.8; padding:12px 16px; background:rgba(255,255,255,.6); border-radius:14px; backdrop-filter:blur(8px); }
+  .med-emg-public .footer-note i { color:#dc2626; margin-inline-end:4px; }
 
   /* History table */
   .med-emg-history { width:100%; border-collapse:collapse; margin-top:14px; font-size:13px; }
@@ -20544,6 +20576,7 @@ window.toggleInjuryPrintPreview = function(){
     document.body.className = 'med-emg-public-page';
     document.body.innerHTML = `
       <div class="med-emg-public">
+        <div class="brand-bar"><span class="dot"></span> MEDICAL EMERGENCY · طوارئ طبية</div>
         <div class="icon-wrap"><i class="fas fa-truck-medical"></i></div>
         <div class="title-stack">
           <h1 dir="rtl">طلب مساعدة طبية عاجلة</h1>
@@ -20551,39 +20584,119 @@ window.toggleInjuryPrintPreview = function(){
           <h2 dir="rtl" style="font-family:'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif;">طبی ایمرجنسی درخواست</h2>
         </div>
 
-        <div class="lang-cards">
-          <div class="lang-card" dir="rtl">
-            <span class="lang-tag">العربية</span>
-            <p>إذا كنت بحاجة إلى مساعدة طبية، اضغط الزر أدناه وسيتم إرسال موقعك الحالي إلى فريق الإسعاف فوراً.</p>
-          </div>
-          <div class="lang-card" dir="ltr">
-            <span class="lang-tag">ENGLISH</span>
-            <p>If you need medical help, press the button below. Your current location will be sent to the medical team immediately.</p>
-          </div>
-          <div class="lang-card" dir="rtl" style="font-family:'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif;">
-            <span class="lang-tag" style="font-family:'Inter',sans-serif;">اردو</span>
-            <p>اگر آپ کو طبی مدد کی ضرورت ہے، نیچے دیا گیا بٹن دبائیں۔ آپ کی موجودہ لوکیشن میڈیکل ٹیم کو فوراً بھیج دی جائے گی۔</p>
+        <div class="panel" dir="rtl">
+          <div class="panel-title" dir="ltr"><i class="fas fa-info-circle"></i> Instructions · تعليمات</div>
+          <div class="lang-cards">
+            <div class="lang-card" dir="rtl">
+              <span class="lang-tag">العربية</span>
+              <p>إذا كنت بحاجة إلى مساعدة طبية، اضغط الزر أدناه وسيتم إرسال موقعك الحالي إلى فريق الإسعاف فوراً.</p>
+            </div>
+            <div class="lang-card" dir="ltr">
+              <span class="lang-tag">ENGLISH</span>
+              <p>If you need medical help, press the button below. Your current location will be sent to the medical team immediately.</p>
+            </div>
+            <div class="lang-card" dir="rtl" style="font-family:'Noto Nastaliq Urdu','Jameel Noori Nastaleeq',serif;">
+              <span class="lang-tag" style="font-family:'Inter',sans-serif;">اردو</span>
+              <p>اگر آپ کو طبی مدد کی ضرورت ہے، نیچے دیا گیا بٹن دبائیں۔ آپ کی موجودہ لوکیشن میڈیکل ٹیم کو فوراً بھیج دی جائے گی۔</p>
+            </div>
           </div>
         </div>
 
-        <button class="big-btn" id="medEmgPublicBtn">
-          <i class="fas fa-truck-medical"></i>
-          <span>طلب المساعدة · Request Help · مدد طلب کریں</span>
-        </button>
+        <div class="panel" dir="rtl">
+          <div class="panel-title" dir="ltr">
+            <i class="fas fa-id-card"></i> Reporter ID · بيانات المبلّغ
+            <span class="opt-tag">اختياري · Optional</span>
+          </div>
+          <div class="iqama-field" dir="ltr">
+            <i class="fas fa-id-badge icn"></i>
+            <input type="text" id="medEmgIqamaInput" inputmode="numeric" autocomplete="off"
+              placeholder="Iqama / ID Number  ·  رقم الإقامة" maxlength="20" />
+          </div>
+          <div class="iqama-hint" dir="rtl">
+            <i class="fas fa-lightbulb"></i>
+            <span>عند إدخال رقم الإقامة، سيتم جلب بياناتك تلقائيًا لمساعدة فريق الطوارئ. (اتركه فارغًا للإرسال بشكل مجهول)</span>
+          </div>
+          <div id="medEmgReporterResult" class="reporter-result"></div>
+        </div>
+
+        <div class="cta-wrap">
+          <button class="big-btn" id="medEmgPublicBtn" type="button">
+            <span class="btn-icon"><i class="fas fa-truck-medical"></i></span>
+            <span class="btn-txt">طلب المساعدة الطبية<br/><span style="font-size:14px; font-weight:600; opacity:.95;">Request Medical Help · مدد طلب کریں</span></span>
+          </button>
+        </div>
+
         <div class="footer-note">
-          <div dir="rtl">لن يتم عرض أي معلومات شخصية عنك.</div>
-          <div dir="ltr">No personal information will be shown.</div>
-          <div dir="rtl" style="font-family:'Noto Nastaliq Urdu',serif;">آپ کی کوئی ذاتی معلومات ظاہر نہیں کی جائے گی۔</div>
+          <div dir="rtl"><i class="fas fa-shield-alt"></i> لن يتم عرض أي معلومات شخصية عنك بشكل علني.</div>
+          <div dir="ltr"><i class="fas fa-shield-alt"></i> Your personal information will not be shown publicly.</div>
         </div>
       </div>
       <!-- keep modals in body -->
       <div id="medEmgConfirmModal" class="modal-overlay"></div>
       <div id="medEmgSuccessModal" class="modal-overlay"></div>
     `;
-    // Re-inject the confirm/success modals (they were removed by innerHTML)
     injectPublicModals();
+
+    // Reporter lookup on Iqama input
+    const iqamaInput = document.getElementById('medEmgIqamaInput');
+    const resultBox  = document.getElementById('medEmgReporterResult');
+    let lookupTimer = null;
+    window.__medEmgReporter = null;
+
+    function lookupReporter(rawId){
+      const id = String(rawId || '').trim();
+      window.__medEmgReporter = null;
+      if (!id){ resultBox.className = 'reporter-result'; resultBox.innerHTML = ''; return; }
+      if (id.length < 3){ resultBox.className = 'reporter-result'; resultBox.innerHTML = ''; return; }
+
+      let list = [];
+      try {
+        if (typeof workers !== 'undefined' && Array.isArray(workers) && workers.length) list = workers;
+        else if (window.workers && Array.isArray(window.workers) && window.workers.length) list = window.workers;
+        if (!list.length){
+          const raw = localStorage.getItem('constructionWorkers');
+          if (raw) list = JSON.parse(raw) || [];
+        }
+      } catch(_){ list = []; }
+
+      const norm = s => String(s || '').replace(/\s+/g,'').toLowerCase();
+      const key = norm(id);
+      const w = list.find(x => x && (norm(x.id) === key || norm(x.iqama) === key || norm(x.nationalId) === key));
+
+      if (w){
+        window.__medEmgReporter = {
+          id: w.id || id, name: w.name || '', role: w.role || '',
+          company: w.company || '', project: w.project || '',
+          phone: w.phone || '', nationality: w.nationality || ''
+        };
+        resultBox.className = 'reporter-result found';
+        resultBox.innerHTML = `
+          <div class="r-name"><i class="fas fa-user-check"></i> ${escapeHtmlSafe(w.name || '—')}</div>
+          <div class="r-meta">
+            ${w.id ? `<b>ID:</b><span>${escapeHtmlSafe(w.id)}</span>` : ''}
+            ${w.role ? `<b>الوظيفة:</b><span>${escapeHtmlSafe(w.role)}</span>` : ''}
+            ${w.company ? `<b>الشركة:</b><span>${escapeHtmlSafe(w.company)}</span>` : ''}
+            ${w.project ? `<b>المشروع:</b><span>${escapeHtmlSafe(w.project)}</span>` : ''}
+            ${w.phone ? `<b>الهاتف:</b><span dir="ltr">${escapeHtmlSafe(w.phone)}</span>` : ''}
+          </div>`;
+      } else {
+        window.__medEmgReporter = { id: id, name: '', role: '', company: '', project: '', phone: '', nationality: '', unmatched: true };
+        resultBox.className = 'reporter-result notfound';
+        resultBox.innerHTML = `<i class="fas fa-exclamation-triangle"></i> لم يتم العثور على بيانات لهذا الرقم. سيتم إرسال الرقم فقط مع البلاغ.`;
+      }
+    }
+
+    function escapeHtmlSafe(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+    window.__medEmgEscape = escapeHtmlSafe;
+
+    iqamaInput.addEventListener('input', e => {
+      clearTimeout(lookupTimer);
+      lookupTimer = setTimeout(() => lookupReporter(e.target.value), 350);
+    });
+
     document.getElementById('medEmgPublicBtn').addEventListener('click', () => medEmgRequestHelp(workerRef));
   }
+
 
   function injectPublicModals(){
     const confirm = document.getElementById('medEmgConfirmModal');
@@ -20617,20 +20730,38 @@ window.toggleInjuryPrintPreview = function(){
   function medEmgRequestHelp(workerRef){
     if (!navigator.geolocation){ alert('المتصفح لا يدعم تحديد الموقع.'); return; }
     const btn = document.getElementById('medEmgPublicBtn');
-    if (btn){ btn.disabled = true; btn.textContent = '📡 جاري تحديد الموقع...'; }
+    const btnTxt = btn ? btn.querySelector('.btn-txt') : null;
+    const setBtn = (txt) => { if (btnTxt) btnTxt.innerHTML = txt; };
+    const restoreBtn = () => setBtn('طلب المساعدة الطبية<br/><span style="font-size:14px; font-weight:600; opacity:.95;">Request Medical Help · مدد طلب کریں</span>');
+    if (btn){ btn.disabled = true; setBtn('📡 جارٍ تحديد الموقع...'); }
     navigator.geolocation.getCurrentPosition(pos => {
-      if (btn){ btn.disabled = false; btn.textContent = '🚨 طلب المساعدة الطبية'; }
+      if (btn){ btn.disabled = false; restoreBtn(); }
       const lat = pos.coords.latitude, lng = pos.coords.longitude;
       const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
-      pendingPayload = { lat, lng, mapsUrl, workerRef: workerRef || 'anonymous', accuracy: pos.coords.accuracy };
+      const reporter = (window.__medEmgReporter && typeof window.__medEmgReporter === 'object') ? window.__medEmgReporter : null;
+      pendingPayload = { lat, lng, mapsUrl, workerRef: workerRef || (reporter && reporter.id) || 'anonymous', accuracy: pos.coords.accuracy, reporter: reporter };
       const coordsBox = document.getElementById('medEmgConfirmCoords');
-      if (coordsBox) coordsBox.innerHTML = `📍 <b>Lat:</b> ${lat.toFixed(6)}<br/>📍 <b>Lng:</b> ${lng.toFixed(6)}<br/>🗺️ <a href="${mapsUrl}" target="_blank" style="color:#0f4c75;">فتح على Google Maps</a>`;
+      if (coordsBox){
+        const esc = window.__medEmgEscape || (s => String(s));
+        let reporterHtml = '';
+        if (reporter && !reporter.unmatched && reporter.name){
+          reporterHtml = `<div style="margin-top:10px; padding:10px 12px; background:#ecfdf5; border:1px solid #a7f3d0; border-radius:10px; text-align:start; color:#065f46;">
+            <div style="font-weight:800; margin-bottom:4px;"><i class="fas fa-user-check"></i> ${esc(reporter.name)}</div>
+            <div style="font-size:12px;">${reporter.id ? `<b>ID:</b> ${esc(reporter.id)}` : ''}${reporter.role ? ` · ${esc(reporter.role)}` : ''}${reporter.company ? ` · ${esc(reporter.company)}` : ''}</div>
+          </div>`;
+        } else if (reporter && reporter.id){
+          reporterHtml = `<div style="margin-top:10px; padding:10px 12px; background:#fff7ed; border:1px solid #fed7aa; border-radius:10px; text-align:start; color:#9a3412; font-size:13px;"><i class="fas fa-id-badge"></i> Iqama/ID: <b>${esc(reporter.id)}</b></div>`;
+        } else {
+          reporterHtml = `<div style="margin-top:10px; padding:10px 12px; background:#f1f5f9; border-radius:10px; text-align:start; color:#475569; font-size:12px;"><i class="fas fa-user-secret"></i> إرسال بدون تحديد الهوية · Anonymous report</div>`;
+        }
+        coordsBox.innerHTML = `📍 <b>Lat:</b> ${lat.toFixed(6)}<br/>📍 <b>Lng:</b> ${lng.toFixed(6)}<br/>🗺️ <a href="${mapsUrl}" target="_blank" style="color:#0f4c75;">فتح على Google Maps</a>${reporterHtml}`;
+      }
       const modal = document.getElementById('medEmgConfirmModal');
       modal.classList.add('show');
       const sendBtn = document.getElementById('medEmgConfirmSendBtn');
       if (sendBtn) sendBtn.onclick = medEmgConfirmSend;
     }, err => {
-      if (btn){ btn.disabled = false; btn.textContent = '🚨 طلب المساعدة الطبية'; }
+      if (btn){ btn.disabled = false; restoreBtn(); }
       alert('تعذّر تحديد الموقع: ' + err.message + '\nيرجى السماح بالوصول للموقع.');
     }, { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
   }
@@ -20640,6 +20771,7 @@ window.toggleInjuryPrintPreview = function(){
     if (!pendingPayload) return;
     const alertNumber = 'ME-' + Date.now().toString(36).toUpperCase();
     const now = Date.now();
+    const r = pendingPayload.reporter || null;
     const record = {
       alertNumber,
       lat: pendingPayload.lat,
@@ -20647,6 +20779,13 @@ window.toggleInjuryPrintPreview = function(){
       mapsUrl: pendingPayload.mapsUrl,
       accuracy: pendingPayload.accuracy,
       workerRef: pendingPayload.workerRef,
+      reporterIqama: r ? (r.id || '') : '',
+      reporterName:  r && !r.unmatched ? (r.name || '') : '',
+      reporterRole:  r && !r.unmatched ? (r.role || '') : '',
+      reporterCompany: r && !r.unmatched ? (r.company || '') : '',
+      reporterProject: r && !r.unmatched ? (r.project || '') : '',
+      reporterPhone: r && !r.unmatched ? (r.phone || '') : '',
+      reporterMatched: !!(r && !r.unmatched && r.name),
       status: 'Active',
       createdAt: now,
       createdAtISO: new Date(now).toISOString(),
@@ -20770,11 +20909,26 @@ window.toggleInjuryPrintPreview = function(){
       const latTxt = isFinite(lat) ? lat.toFixed(6) : '—';
       const lngTxt = isFinite(lng) ? lng.toFixed(6) : '—';
       const mapsUrl = (alert && alert.mapsUrl) || (isFinite(lat) && isFinite(lng) ? ('https://www.google.com/maps?q=' + lat + ',' + lng) : '#');
+      const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      let reporterBlock = '';
+      if (alert && (alert.reporterName || alert.reporterIqama)){
+        if (alert.reporterMatched && alert.reporterName){
+          reporterBlock = `<div style="margin-top:8px; padding:8px 10px; background:#ecfdf5; border-left:4px solid #10b981; border-radius:8px;">
+            👤 <b>Reporter:</b> ${esc(alert.reporterName)}${alert.reporterRole ? ' — ' + esc(alert.reporterRole) : ''}<br/>
+            🪪 <b>Iqama/ID:</b> ${esc(alert.reporterIqama || '—')}${alert.reporterCompany ? '<br/>🏢 <b>Company:</b> ' + esc(alert.reporterCompany) : ''}${alert.reporterProject ? '<br/>🏗️ <b>Project:</b> ' + esc(alert.reporterProject) : ''}${alert.reporterPhone ? '<br/>📞 <b>Phone:</b> <a href="tel:' + esc(alert.reporterPhone) + '">' + esc(alert.reporterPhone) + '</a>' : ''}
+          </div>`;
+        } else if (alert.reporterIqama){
+          reporterBlock = `<div style="margin-top:8px; padding:8px 10px; background:#fff7ed; border-left:4px solid #f59e0b; border-radius:8px;">🪪 <b>Reporter Iqama/ID:</b> ${esc(alert.reporterIqama)} <span style="color:#9a3412; font-size:12px;">(not matched in database)</span></div>`;
+        }
+      } else {
+        reporterBlock = `<div style="margin-top:8px; padding:6px 10px; background:#f1f5f9; border-radius:8px; color:#64748b; font-size:13px;">👤 Reporter: Anonymous</div>`;
+      }
       if (meta) meta.innerHTML = `
         🔢 <b>Alert #:</b> ${(alert && alert.alertNumber) || id}<br/>
         🕐 <b>Time:</b> ${t}<br/>
         📍 <b>Coordinates:</b> ${latTxt}, ${lngTxt}<br/>
-        🗺️ <a href="${mapsUrl}" target="_blank" style="color:#0f4c75;">Open in Google Maps</a>`;
+        🗺️ <a href="${mapsUrl}" target="_blank" style="color:#0f4c75;">Open in Google Maps</a>
+        ${reporterBlock}`;
       const iframe = document.getElementById('medEmgAlertMap');
       if (iframe && isFinite(lat) && isFinite(lng)) iframe.src = `https://maps.google.com/maps?q=${lat},${lng}&z=17&output=embed`;
       let overlay = document.getElementById('medEmgNurseAlert');
