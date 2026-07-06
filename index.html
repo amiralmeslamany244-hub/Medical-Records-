@@ -6727,6 +6727,7 @@ window.YMCO_showSplash = function(){
                 <button class="btn" onclick="openMonthlyInjuryReport()" title="Generate monthly injury report (PDF)" style="background:linear-gradient(135deg,#dc2626,#991b1b);min-width:120px;"><i class="fas fa-file-medical-alt"></i> Monthly Injury Report</button>
                 <button class="btn" onclick="openEmergencyQRModal()" title="Generate Smart Emergency QR for a worker" style="background:linear-gradient(135deg,#ea580c,#b91c1c);min-width:120px;"><i class="fas fa-ambulance"></i> Smart Emergency QR</button>
                  <button class="btn perm-medical_emergency_qr" onclick="openMedicalEmergencyQRModal()" title="Public medical help request QR (no worker data shown)" style="background:linear-gradient(135deg,#dc2626,#7f1d1d);min-width:120px;"><i class="fas fa-truck-medical"></i> Medical Emergency QR</button>
+                 <button class="btn perm-medical_emergency_qr" onclick="openAlertsHistory()" title="Emergency Alerts History — سجل بلاغات الطوارئ الطبية" style="background:linear-gradient(135deg,#0f4c75,#3282b8);min-width:120px;"><i class="fas fa-clipboard-list"></i> Emergency Alerts History</button>
             </div>
             <div class="workers-grid" id="workersGrid"></div>
         </div>
@@ -20519,6 +20520,7 @@ window.toggleInjuryPrintPreview = function(){
     <div class="meta" id="medEmgAlertMeta">Loading...</div>
     <iframe id="medEmgAlertMap" style="width:100%; height:260px; border:0; border-radius:12px;" loading="lazy"></iframe>
     <div class="actions">
+      <button class="med-emg-btn success" style="grid-column:1 / -1;background:linear-gradient(135deg,#059669,#065f46);color:#fff;font-size:16px;" onclick="medEmgAcceptEmergency()"><i class="fas fa-user-nurse"></i> Accept Emergency — قبول البلاغ وبدء التتبع</button>
       <button class="med-emg-btn primary" onclick="medEmgOpenMap()"><i class="fas fa-map"></i> Open Location</button>
       <button class="med-emg-btn secondary" onclick="medEmgAcknowledge()"><i class="fas fa-check"></i> Acknowledge</button>
       <button class="med-emg-btn success" onclick="medEmgResolve()"><i class="fas fa-flag-checkered"></i> Resolve</button>
@@ -20639,6 +20641,7 @@ window.toggleInjuryPrintPreview = function(){
       <div id="medEmgCountdownModal" class="modal-overlay"></div>
       <div id="medEmgCancelledModal" class="modal-overlay"></div>
       <div id="medEmgSuccessModal" class="modal-overlay"></div>
+      <div id="medEmgSendingModal" class="modal-overlay"></div>
     `;
     injectPublicModals();
 
@@ -20758,6 +20761,22 @@ window.toggleInjuryPrintPreview = function(){
         <p dir="ltr" style="color:#64748b; line-height:1.6; margin:6px 0 14px;">The report was cancelled. No medical help request was sent.</p>
         <button class="med-emg-btn" style="background:linear-gradient(135deg,#f97316,#c2410c); color:#fff;" onclick="document.getElementById('medEmgCancelledModal').classList.remove('show')">حسناً / OK</button>
       </div>`;
+
+    // ===== Sending (loading) modal =====
+    const sending = document.getElementById('medEmgSendingModal');
+    if (sending){
+      sending.innerHTML = `
+        <div class="med-emg-card" style="text-align:center; max-width:420px;">
+          <div style="width:80px;height:80px;margin:0 auto 16px;border-radius:50%;border:6px solid #fee2e2;border-top-color:#dc2626;animation:medEmgSpin 1s linear infinite;"></div>
+          <h2 style="justify-content:center;color:#7f1d1d;">جاري إرسال بلاغ الطوارئ...</h2>
+          <p dir="ltr" style="color:#64748b;">Sending emergency alert to the medical clinic...</p>
+        </div>`;
+      if (!document.getElementById('medEmgSpinStyle')){
+        const st = document.createElement('style'); st.id='medEmgSpinStyle';
+        st.textContent = '@keyframes medEmgSpin{to{transform:rotate(360deg)}}';
+        document.head.appendChild(st);
+      }
+    }
   }
 
   // ===== Audit event logger (False Alarm / countdown_sent / send_now) =====
@@ -20923,6 +20942,12 @@ window.toggleInjuryPrintPreview = function(){
 
   function medEmgConfirmSend(){
     if (!pendingPayload) return;
+    // Show sending loading state
+    try {
+      const s = document.getElementById('medEmgSendingModal');
+      if (s) s.classList.add('show');
+      document.getElementById('medEmgConfirmModal').classList.remove('show');
+    } catch(_){}
     const alertNumber = 'ME-' + Date.now().toString(36).toUpperCase();
     const now = Date.now();
     const r = pendingPayload.reporter || null;
@@ -20960,6 +20985,7 @@ window.toggleInjuryPrintPreview = function(){
       nurseNote: ''
     };
     const done = (id) => {
+      try { document.getElementById('medEmgSendingModal').classList.remove('show'); } catch(_){}
       document.getElementById('medEmgConfirmModal').classList.remove('show');
       const succ = document.getElementById('medEmgSuccessModal');
       const numEl = document.getElementById('medEmgSuccessNumber');
@@ -20988,6 +21014,37 @@ window.toggleInjuryPrintPreview = function(){
       });
       window.__medEmgSendSource = null;
       pendingPayload = null;
+
+      // ==== Auto-open Live Response Tracker for the worker ====
+      try {
+        const alertKey = id || alertNumber;
+        if (window.ERT && typeof ERT.triggerAsWorker === 'function'){
+          setTimeout(() => {
+            try { document.getElementById('medEmgSuccessModal').classList.remove('show'); } catch(_){}
+            ERT.triggerAsWorker({
+              alertId: alertKey,
+              alertNumber: alertNumber,
+              name: record.reporterName || 'Worker',
+              iqama: record.reporterIqama || '',
+              phone: record.reporterPhone || '',
+              company: record.reporterCompany || '',
+              project: record.reporterProject || ''
+            }, null, alertKey);
+          }, 1500);
+        }
+        // Listen for nurse acknowledgment on the alert record
+        if (db && id){
+          const alertRef = db.ref('emergency_alerts/' + id);
+          const nurseListener = alertRef.on('value', snap => {
+            const v = snap.val(); if (!v) return;
+            if (v.acknowledgedAt && !window.__medEmgAckShown){
+              window.__medEmgAckShown = true;
+              medEmgShowNurseAcceptedBanner(v);
+            }
+          });
+          window.__medEmgAckListener = { ref: alertRef, cb: nurseListener };
+        }
+      } catch(e){ console.warn('[MedEmg] auto-open ERT failed', e); }
     };
     if (db){
       const ref = db.ref('emergency_alerts').push();
@@ -21129,6 +21186,7 @@ window.toggleInjuryPrintPreview = function(){
           <div class="meta" id="medEmgAlertMeta">${meta ? meta.innerHTML : ''}</div>
           <iframe id="medEmgAlertMap" style="width:100%; height:260px; border:0; border-radius:12px;" loading="lazy"></iframe>
           <div class="actions">
+            <button class="med-emg-btn success" style="grid-column:1 / -1;background:linear-gradient(135deg,#059669,#065f46);color:#fff;font-size:16px;" onclick="medEmgAcceptEmergency()"><i class="fas fa-user-nurse"></i> Accept Emergency — قبول البلاغ وبدء التتبع</button>
             <button class="med-emg-btn primary" onclick="medEmgOpenMap()"><i class="fas fa-map"></i> Open Location</button>
             <button class="med-emg-btn secondary" onclick="medEmgAcknowledge()"><i class="fas fa-check"></i> Acknowledge</button>
             <button class="med-emg-btn success" onclick="medEmgResolve()"><i class="fas fa-flag-checkered"></i> Resolve</button>
@@ -21198,6 +21256,99 @@ window.toggleInjuryPrintPreview = function(){
     medEmgStopSiren();
     document.getElementById('medEmgNurseAlert').classList.remove('show');
     currentAlertId = null; currentAlert = null;
+  };
+
+  // ============ NEW: Accept Emergency (nurse opens live tracker) ============
+  window.medEmgAcceptEmergency = function(){
+    if (!currentAlertId) { alert('No active alert.'); return; }
+    // Try to identify current nurse from app auth context
+    let nurseName = 'Medical Nurse', nurseId = '', nursePhone = '', nursePhoto = '';
+    try {
+      const u = (window.currentUser || window.__currentUser || null);
+      if (u){
+        nurseName = u.name || u.fullName || u.displayName || nurseName;
+        nurseId = u.id || u.userId || u.email || '';
+        nursePhone = u.phone || '';
+        nursePhoto = u.photo || u.avatar || '';
+      } else if (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser){
+        const fu = firebase.auth().currentUser;
+        nurseName = fu.displayName || fu.email || nurseName;
+        nurseId = fu.uid || '';
+        nursePhoto = fu.photoURL || '';
+      }
+    } catch(_){}
+    const now = Date.now();
+    const upd = {
+      status: 'Acknowledged',
+      acknowledgedAt: now,
+      nurseName: nurseName,
+      nurseId: nurseId,
+      nursePhone: nursePhone,
+      nursePhoto: nursePhoto,
+      nurseAcceptedAt: now
+    };
+    if (db) db.ref('emergency_alerts/' + currentAlertId).update(upd);
+    else { const all = lsGetAll(); if (all[currentAlertId]){ Object.assign(all[currentAlertId], upd); localStorage.setItem(LS_KEY, JSON.stringify(all)); triggerLocalListeners(currentAlertId, all[currentAlertId]); } }
+    medEmgStopSiren();
+    // Close nurse overlay
+    const ov = document.getElementById('medEmgNurseAlert'); if (ov) ov.classList.remove('show');
+    // Open live tracker as nurse
+    try {
+      if (window.ERT && typeof ERT.joinAsNurse === 'function'){
+        ERT.joinAsNurse(currentAlertId, {
+          nurseName: nurseName,
+          nursePhone: nursePhone,
+          nursePhoto: nursePhoto,
+          workerAlert: currentAlert
+        });
+      }
+    } catch(e){ console.warn('[MedEmg] failed to open ERT as nurse', e); }
+  };
+
+  // ============ NEW: Worker-side banner when nurse accepts the alert ============
+  window.medEmgShowNurseAcceptedBanner = function(alertData){
+    try {
+      // Play a short chime
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC){
+          const ctx = new AC();
+          const osc = ctx.createOscillator(), gain = ctx.createGain();
+          osc.type = 'sine'; osc.frequency.value = 880; gain.gain.value = 0.18;
+          osc.connect(gain).connect(ctx.destination); osc.start();
+          setTimeout(() => { try { osc.frequency.value = 1320; } catch(_){} }, 180);
+          setTimeout(() => { try { osc.stop(); ctx.close(); } catch(_){} }, 500);
+        }
+      } catch(_){}
+      try { if (navigator.vibrate) navigator.vibrate([200,80,200,80,400]); } catch(_){}
+      const nurseName = alertData.nurseName || 'Medical Nurse';
+      const t = new Date(alertData.acknowledgedAt || Date.now()).toLocaleTimeString('en-GB');
+      const photo = alertData.nursePhoto ? `<img src="${alertData.nursePhoto}" style="width:64px;height:64px;border-radius:50%;border:3px solid #10b981;object-fit:cover;" onerror="this.remove()"/>` : `<div style="width:64px;height:64px;border-radius:50%;background:#10b981;display:flex;align-items:center;justify-content:center;color:#fff;font-size:28px;"><i class="fas fa-user-nurse"></i></div>`;
+      let banner = document.getElementById('medEmgNurseAcceptedBanner');
+      if (!banner){
+        banner = document.createElement('div');
+        banner.id = 'medEmgNurseAcceptedBanner';
+        banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:100000;background:linear-gradient(135deg,#059669,#065f46);color:#fff;padding:18px 20px;box-shadow:0 10px 30px rgba(5,150,105,.45);animation:medEmgSlideDown .5s cubic-bezier(.2,.9,.3,1.2);font-family:Inter,system-ui,sans-serif;';
+        document.body.appendChild(banner);
+      }
+      banner.innerHTML = `<div style="max-width:640px;margin:0 auto;display:flex;gap:14px;align-items:center;">
+        ${photo}
+        <div style="flex:1;">
+          <div style="font-size:20px;font-weight:800;display:flex;align-items:center;gap:8px;"><i class="fas fa-check-circle"></i> تم استلام البلاغ من قبل الممرض</div>
+          <div style="font-size:13px;opacity:.95;margin-top:4px;">Nurse: <b>${nurseName}</b> · Time: ${t}</div>
+        </div>
+        <button onclick="this.parentElement.parentElement.remove()" style="background:rgba(0,0,0,.25);border:0;color:#fff;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:700;"><i class="fas fa-times"></i></button>
+      </div>`;
+      if (!document.getElementById('medEmgBannerKeyframes')){
+        const st = document.createElement('style'); st.id = 'medEmgBannerKeyframes';
+        st.textContent = '@keyframes medEmgSlideDown{from{transform:translateY(-100%);opacity:0}to{transform:translateY(0);opacity:1}}';
+        document.head.appendChild(st);
+      }
+      // Auto-hide after 12s
+      setTimeout(() => { try { banner.style.transition='all .5s'; banner.style.opacity='0'; banner.style.transform='translateY(-100%)'; setTimeout(()=>banner.remove(),600);} catch(_){}}, 12000);
+      // Feed nurse info into ERT sidebar (worker view)
+      try { window.dispatchEvent(new CustomEvent('ert:nurseInfo', { detail: alertData })); } catch(_){}
+    } catch(e){ console.warn('[MedEmg] banner failed', e); }
   };
 
   // Subscribe (only on main app, NOT on the public page)
@@ -21346,14 +21497,35 @@ window.toggleInjuryPrintPreview = function(){
       <div class="ert-card">
         <div style="font-size:.72rem;opacity:.7;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:10px"><i class="fas fa-list-check"></i> Response Timeline</div>
         <ul class="ert-timeline" id="ertTimeline">
-          <li data-step="received">Emergency Received</li>
-          <li data-step="dispatched">Nurse Dispatched</li>
-          <li data-step="enroute">Nurse En Route</li>
-          <li data-step="arriving">Arriving Soon</li>
-          <li data-step="arrived">Nurse Arrived</li>
+          <li data-step="received">✅ Emergency Sent — تم إرسال البلاغ</li>
+          <li data-step="dispatched">✅ Received by Nurse — تم استلام البلاغ</li>
+          <li data-step="enroute">🚑 Nurse En Route — الممرض في الطريق</li>
+          <li data-step="arriving">📍 Arriving Soon — يقترب من الموقع</li>
+          <li data-step="arrived">✅ Nurse Arrived — وصل الممرض</li>
+          <li data-step="firstaid">🩺 Providing First Aid — تقديم الإسعافات</li>
+          <li data-step="completed">✔️ Case Completed — تم إنهاء الحالة</li>
         </ul>
       </div>
+      <div id="ertNurseInfoCard" class="ert-card" style="display:none;background:linear-gradient(135deg,rgba(16,185,129,.15),rgba(5,150,105,.15));border-color:rgba(16,185,129,.35);">
+        <div style="display:flex;gap:12px;align-items:center;">
+          <div id="ertNursePhoto" style="width:56px;height:56px;border-radius:50%;background:#10b981;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;flex-shrink:0;"><i class="fas fa-user-nurse"></i></div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:.72rem;opacity:.7;letter-spacing:1.2px;text-transform:uppercase;">Nurse — الممرض</div>
+            <div id="ertNurseName" style="font-weight:800;font-size:1.05rem;color:#86efac;margin-top:2px;">—</div>
+            <div id="ertNurseAcceptedAt" style="font-size:.75rem;opacity:.8;margin-top:2px;">—</div>
+          </div>
+        </div>
+      </div>
+      <div id="ertAlertInfoCard" class="ert-card" style="display:none;">
+        <div style="font-size:.72rem;opacity:.7;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:8px;">Alert Info</div>
+        <div style="font-size:.85rem;line-height:1.7;">
+          <div>🔢 <b>Alert #:</b> <span id="ertAlertNumber">—</span></div>
+          <div>📤 <b>Sent:</b> <span id="ertSentAt">—</span></div>
+          <div>📥 <b>Received:</b> <span id="ertReceivedAt">—</span></div>
+        </div>
+      </div>
       <div id="ertWorkerControls">
+        <button class="ert-btn ert-btn-primary" id="ertCallNurseBtn" style="display:none;" onclick="ERT.callNurse()"><i class="fas fa-phone"></i> Call Nurse — اتصل بالممرض</button>
         <button class="ert-btn ert-btn-danger" onclick="ERT.cancel()"><i class="fas fa-ban"></i> Cancel Emergency</button>
       </div>
       <div id="ertNurseControls" style="display:none">
@@ -21368,7 +21540,7 @@ window.toggleInjuryPrintPreview = function(){
 <script>
 (function(){
   'use strict';
-  const STEPS = ['received','dispatched','enroute','arriving','arrived'];
+  const STEPS = ['received','dispatched','enroute','arriving','arrived','firstaid','completed'];
   const state = {
     active:false, role:'worker', emergencyId:null, worker:null,
     clinic:{lat:null,lng:null}, workerPos:null, nursePos:null,
@@ -21476,7 +21648,7 @@ window.toggleInjuryPrintPreview = function(){
       if (i<cur) li.classList.add('done');
       else if (i===cur) li.classList.add('current');
     });
-    const labels={received:'Emergency received. Locating nurse…',dispatched:'Nurse has been dispatched.',enroute:'Nurse en route to your location.',arriving:'Nurse is arriving soon.',arrived:'Nurse has arrived.',completed:'Case completed.',cancelled:'Emergency cancelled.'};
+    const labels={received:'Emergency sent. Waiting for nurse…',dispatched:'✅ Nurse accepted your request.',enroute:'🚑 Nurse en route to your location.',arriving:'📍 Nurse is arriving soon.',arrived:'✅ Nurse has arrived at your location.',firstaid:'🩺 First aid in progress.',completed:'✔️ Case completed.',cancelled:'Emergency cancelled.'};
     document.getElementById('ertHeaderSub').textContent = labels[state.status] || '';
   }
 
@@ -21488,7 +21660,7 @@ window.toggleInjuryPrintPreview = function(){
   }
 
   // ===== Firebase sync =====
-  function fbPath(){ return 'emergencies/' + state.emergencyId; }
+  function fbPath(){ return 'emergency_alerts/' + state.emergencyId + '/track'; }
   function pushToFirebase(patch){
     const fb = getFirebase(); if(!fb || !state.emergencyId) return;
     try { fb.database().ref(fbPath()).update(patch); } catch(e){ console.warn('ERT fb update failed',e); }
@@ -21562,6 +21734,46 @@ window.toggleInjuryPrintPreview = function(){
     }, 1500);
   }
 
+  // ===== Parent alert listener (worker sees nurse info live) =====
+  function applyNurseInfoUI(info){
+    try {
+      state.nurseInfo = Object.assign({}, state.nurseInfo || {}, info || {});
+      const card = document.getElementById('ertNurseInfoCard'); if (card) card.style.display = '';
+      const nm = document.getElementById('ertNurseName'); if (nm) nm.textContent = info.nurseName || 'Medical Nurse';
+      const at = document.getElementById('ertNurseAcceptedAt');
+      if (at && info.acknowledgedAt) at.textContent = 'Accepted at ' + new Date(info.acknowledgedAt).toLocaleTimeString('en-GB');
+      const photoBox = document.getElementById('ertNursePhoto');
+      if (photoBox && info.nursePhoto){ photoBox.innerHTML = '<img src="'+info.nursePhoto+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" onerror="this.parentElement.innerHTML=\'<i class=\\\'fas fa-user-nurse\\\'></i>\'"/>'; }
+      const ra = document.getElementById('ertReceivedAt'); if (ra && info.acknowledgedAt) ra.textContent = new Date(info.acknowledgedAt).toLocaleTimeString('en-GB');
+      const callBtn = document.getElementById('ertCallNurseBtn'); if (callBtn && info.nursePhone) callBtn.style.display = '';
+      // Advance status if we were still at "received"
+      if (state.status === 'received') setStatus('dispatched');
+    } catch(e){ console.warn('[ERT] applyNurseInfoUI', e); }
+  }
+  window.addEventListener('ert:nurseInfo', e => applyNurseInfoUI(e.detail || {}));
+
+  function attachParentAlertListener(){
+    const fb = getFirebase(); if (!fb || !state.emergencyId) return;
+    try {
+      const parentRef = fb.database().ref('emergency_alerts/' + state.emergencyId);
+      const cb = parentRef.on('value', snap => {
+        const v = snap.val(); if (!v) return;
+        if (v.nurseName || v.acknowledgedAt){
+          applyNurseInfoUI({
+            nurseName: v.nurseName,
+            nursePhone: v.nursePhone,
+            nursePhoto: v.nursePhoto,
+            acknowledgedAt: v.acknowledgedAt
+          });
+        }
+        if (v.status === 'Resolved' && state.status !== 'completed'){
+          setStatus('completed');
+        }
+      });
+      state.parentRef = parentRef; state.parentCb = cb;
+    } catch(e){ console.warn('[ERT] parent listener failed', e); }
+  }
+
   // ===== Public API =====
   const ERT = {
     open(opts={}){
@@ -21571,6 +21783,8 @@ window.toggleInjuryPrintPreview = function(){
       state.worker = opts.worker || null;
       state.status = 'received';
       state.routeIdx = 0;
+      state.nurseInfo = opts.nurseInfo || null;
+      state.alertNumber = (opts.worker && opts.worker.alertNumber) || opts.emergencyId;
       const clinic = opts.clinic || getClinicLocation();
       if (clinic && clinic.lat) state.clinic = clinic;
 
@@ -21582,6 +21796,19 @@ window.toggleInjuryPrintPreview = function(){
       initMap();
       renderTimeline();
       attachFirebaseListener();
+      attachParentAlertListener();
+      // Populate initial alert info card (worker view)
+      if (state.role === 'worker'){
+        try {
+          const infoCard = document.getElementById('ertAlertInfoCard');
+          if (infoCard){
+            infoCard.style.display = '';
+            const an = document.getElementById('ertAlertNumber'); if (an) an.textContent = state.alertNumber || '—';
+            const sa = document.getElementById('ertSentAt'); if (sa) sa.textContent = new Date().toLocaleTimeString('en-GB');
+          }
+          if (state.nurseInfo) applyNurseInfoUI(state.nurseInfo);
+        } catch(_){}
+      }
 
       if (state.role==='worker'){
         startWorkerWatch();
@@ -21624,8 +21851,13 @@ window.toggleInjuryPrintPreview = function(){
       window.open(url,'_blank');
     },
     // Explicit convenience triggers (integration hooks)
-    triggerAsWorker(worker, clinic){ this.open({role:'worker', worker, clinic}); },
-    joinAsNurse(emergencyId){ this.open({role:'nurse', emergencyId}); },
+    triggerAsWorker(worker, clinic, emergencyId){ this.open({role:'worker', worker, clinic, emergencyId}); },
+    joinAsNurse(emergencyId, nurseInfo){ this.open({role:'nurse', emergencyId, nurseInfo}); },
+    callNurse(){
+      const phone = state.nurseInfo && state.nurseInfo.nursePhone;
+      if (phone) window.location.href = 'tel:' + phone;
+      else alert('Nurse phone number not available.');
+    },
     isActive(){ return state.active; }
   };
 
@@ -21638,6 +21870,7 @@ window.toggleInjuryPrintPreview = function(){
     if (state.animTimer){ clearInterval(state.animTimer); state.animTimer=null; }
     if (state.nurseTimer){ clearInterval(state.nurseTimer); state.nurseTimer=null; }
     if (state.fbRef && state.fbListener){ try{state.fbRef.off('value',state.fbListener);}catch(_){} state.fbRef=null; state.fbListener=null; }
+    if (state.parentRef && state.parentCb){ try{state.parentRef.off('value',state.parentCb);}catch(_){} state.parentRef=null; state.parentCb=null; }
     if (state.map){ try{state.map.remove();}catch(_){} state.map=null; }
     state.workerMarker=state.clinicMarker=state.nurseMarker=state.routeLine=null;
     state.workerPos=state.nursePos=null; state.route=[]; state.routeIdx=0;
