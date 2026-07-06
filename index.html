@@ -20479,6 +20479,9 @@ window.toggleInjuryPrintPreview = function(){
       <button class="med-emg-btn secondary" onclick="medEmgDownloadQR()"><i class="fas fa-download"></i> Download PNG</button>
       <button class="med-emg-btn secondary" onclick="medEmgPrintQR()"><i class="fas fa-print"></i> Print Sticker</button>
     </div>
+    <div style="margin-top:10px;">
+      <button class="med-emg-btn primary" style="width:100%;background:linear-gradient(135deg,#0f4c75,#3282b8);" onclick="openAlertsHistory()"><i class="fas fa-clipboard-list"></i> Emergency Alerts History — سجل بلاغات الطوارئ الطبية</button>
+    </div>
     <div id="medEmgConfigWarn" style="display:none; margin-top:14px; padding:10px 12px; background:#fef3c7; border-left:4px solid #f59e0b; border-radius:8px; font-size:13px; color:#78350f;">
       ⚠️ Firebase is not configured. Alerts won't send until you paste your Firebase config inside this file (search for <code>FIREBASE_CONFIG_PLACEHOLDER</code>).
     </div>
@@ -20517,7 +20520,6 @@ window.toggleInjuryPrintPreview = function(){
     <iframe id="medEmgAlertMap" style="width:100%; height:260px; border:0; border-radius:12px;" loading="lazy"></iframe>
     <div class="actions">
       <button class="med-emg-btn primary" onclick="medEmgOpenMap()"><i class="fas fa-map"></i> Open Location</button>
-      <button class="med-emg-btn" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;" onclick="medEmgTrackLive()"><i class="fas fa-satellite-dish"></i> Track Live</button>
       <button class="med-emg-btn secondary" onclick="medEmgAcknowledge()"><i class="fas fa-check"></i> Acknowledge</button>
       <button class="med-emg-btn success" onclick="medEmgResolve()"><i class="fas fa-flag-checkered"></i> Resolve</button>
     </div>
@@ -20964,27 +20966,6 @@ window.toggleInjuryPrintPreview = function(){
       if (numEl) numEl.textContent = 'رقم البلاغ: ' + alertNumber;
       succ.classList.add('show');
       if (navigator.vibrate) navigator.vibrate([200,100,200,100,400]);
-      // Auto-open the full-screen live tracker for the worker after a brief moment
-      try {
-        setTimeout(() => {
-          try { succ.classList.remove('show'); } catch(_){}
-          if (window.ERT && typeof window.ERT.open === 'function'){
-            window.ERT.open({
-              role: 'worker',
-              emergencyId: id || alertNumber,
-              worker: {
-                name: record.reporterName || '',
-                id: record.reporterIqama || '',
-                company: record.reporterCompany || '',
-                project: record.reporterProject || '',
-                phone: record.reporterPhone || '',
-                alertNumber: alertNumber
-              },
-              workerPos: (record.lat && record.lng) ? { lat: record.lat, lng: record.lng } : null
-            });
-          }
-        }, 1600);
-      } catch(e){ console.warn('[MedEmg] tracker open failed', e); }
       medEmgLogEvent({
         type: 'sent',
         triggerSource: window.__medEmgSendSource || 'manual',
@@ -21149,7 +21130,6 @@ window.toggleInjuryPrintPreview = function(){
           <iframe id="medEmgAlertMap" style="width:100%; height:260px; border:0; border-radius:12px;" loading="lazy"></iframe>
           <div class="actions">
             <button class="med-emg-btn primary" onclick="medEmgOpenMap()"><i class="fas fa-map"></i> Open Location</button>
-            <button class="med-emg-btn" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;" onclick="medEmgTrackLive()"><i class="fas fa-satellite-dish"></i> Track Live</button>
             <button class="med-emg-btn secondary" onclick="medEmgAcknowledge()"><i class="fas fa-check"></i> Acknowledge</button>
             <button class="med-emg-btn success" onclick="medEmgResolve()"><i class="fas fa-flag-checkered"></i> Resolve</button>
           </div></div>`;
@@ -21203,25 +21183,6 @@ window.toggleInjuryPrintPreview = function(){
     } catch(_){}
   }, { once:true });
   window.medEmgOpenMap = function(){ if (currentAlert) window.open(currentAlert.mapsUrl, '_blank'); };
-  window.medEmgTrackLive = function(){
-    try {
-      if (!window.ERT || typeof window.ERT.open !== 'function'){ alert('Live tracker unavailable'); return; }
-      if (!currentAlertId || !currentAlert){ alert('No active alert to track'); return; }
-      const wp = (currentAlert.lat && currentAlert.lng) ? { lat: currentAlert.lat, lng: currentAlert.lng } : null;
-      window.ERT.open({
-        role: 'nurse',
-        emergencyId: currentAlertId,
-        worker: {
-          name: currentAlert.reporterName || '',
-          id: currentAlert.reporterIqama || '',
-          company: currentAlert.reporterCompany || '',
-          alertNumber: currentAlert.alertNumber || ''
-        },
-        workerPos: wp
-      });
-      try { medEmgStopSiren(); } catch(_){}
-    } catch(e){ console.warn('[MedEmg] Track Live failed', e); }
-  };
   window.medEmgAcknowledge = function(){
     if (!currentAlertId) return;
     const upd = { status:'Acknowledged', acknowledgedAt: Date.now() };
@@ -21612,8 +21573,6 @@ window.toggleInjuryPrintPreview = function(){
       state.routeIdx = 0;
       const clinic = opts.clinic || getClinicLocation();
       if (clinic && clinic.lat) state.clinic = clinic;
-      if (opts.workerPos && opts.workerPos.lat){ state.workerPos = { lat: opts.workerPos.lat, lng: opts.workerPos.lng }; }
-      if (opts.nursePos && opts.nursePos.lat){ state.nursePos = { lat: opts.nursePos.lat, lng: opts.nursePos.lng }; }
 
       document.getElementById('ertOverlay').classList.add('active');
       document.getElementById('ertRoleBadge').textContent = state.role==='nurse' ? 'Nurse / Admin' : 'Worker';
@@ -21697,6 +21656,539 @@ window.toggleInjuryPrintPreview = function(){
 })();
 </script>
 <!-- ==================== /LIVE EMERGENCY RESPONSE TRACKER ==================== -->
+
+<!-- ================== EMERGENCY ALERTS HISTORY MODULE ================== -->
+<style>
+  #alertsHistoryModal{position:fixed;inset:0;background:rgba(15,23,42,0.75);z-index:10050;display:none;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px;backdrop-filter:blur(6px);}
+  #alertsHistoryModal.show{display:flex;}
+  .aeh-card{background:#fff;border-radius:20px;width:100%;max-width:1400px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.35);overflow:hidden;font-family:Inter,system-ui,sans-serif;}
+  .aeh-head{background:linear-gradient(135deg,#0f4c75,#3282b8);color:#fff;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+  .aeh-head h2{margin:0;font-size:1.35em;display:flex;align-items:center;gap:10px;}
+  .aeh-close{background:rgba(255,255,255,0.15);border:0;color:#fff;width:38px;height:38px;border-radius:50%;font-size:18px;cursor:pointer;transition:.2s;}
+  .aeh-close:hover{background:rgba(255,255,255,0.3);}
+  .aeh-body{padding:20px 24px 28px;max-height:calc(100vh - 100px);overflow-y:auto;}
+  .aeh-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px;}
+  .aeh-stat{background:linear-gradient(135deg,#f8fafc,#eef2f7);border:1px solid #e2e8f0;border-radius:14px;padding:14px 16px;position:relative;overflow:hidden;}
+  .aeh-stat b{display:block;font-size:1.6em;color:#0f172a;font-weight:800;line-height:1.1;}
+  .aeh-stat span{font-size:.78em;color:#64748b;text-transform:uppercase;letter-spacing:.5px;font-weight:600;}
+  .aeh-stat.new b{color:#dc2626;} .aeh-stat.open b{color:#f59e0b;} .aeh-stat.closed b{color:#10b981;} .aeh-stat.false b{color:#64748b;} .aeh-stat.avg b{color:#0f4c75;font-size:1.3em;}
+  .aeh-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;background:#f8fafc;padding:14px;border-radius:14px;margin-bottom:16px;border:1px solid #e2e8f0;}
+  .aeh-filters input,.aeh-filters select{padding:9px 11px;border:1px solid #d1d5db;border-radius:9px;font-size:13px;background:#fff;font-family:inherit;}
+  .aeh-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+  .aeh-btn{border:0;padding:9px 14px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:.2s;font-family:inherit;}
+  .aeh-btn.primary{background:linear-gradient(135deg,#0f4c75,#3282b8);color:#fff;}
+  .aeh-btn.pdf{background:linear-gradient(135deg,#dc2626,#991b1b);color:#fff;}
+  .aeh-btn.excel{background:linear-gradient(135deg,#059669,#047857);color:#fff;}
+  .aeh-btn.ghost{background:#fff;color:#334155;border:1px solid #cbd5e1;}
+  .aeh-btn:hover{transform:translateY(-1px);box-shadow:0 4px 10px rgba(0,0,0,0.12);}
+  .aeh-btn:disabled{opacity:.5;cursor:not-allowed;}
+  .aeh-table-wrap{overflow-x:auto;border:1px solid #e2e8f0;border-radius:14px;background:#fff;}
+  table.aeh-table{width:100%;border-collapse:collapse;font-size:13px;min-width:1050px;}
+  table.aeh-table th{background:#0f4c75;color:#fff;text-align:left;padding:11px 10px;font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.4px;position:sticky;top:0;}
+  table.aeh-table td{padding:10px;border-bottom:1px solid #f1f5f9;color:#334155;vertical-align:middle;}
+  table.aeh-table tbody tr{cursor:pointer;transition:.15s;}
+  table.aeh-table tbody tr:hover{background:#f8fafc;}
+  .aeh-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap;}
+  .aeh-s-new{background:#fee2e2;color:#991b1b;}
+  .aeh-s-accepted{background:#ffedd5;color:#9a3412;}
+  .aeh-s-enroute{background:#dbeafe;color:#1e40af;}
+  .aeh-s-arrived{background:#d1fae5;color:#065f46;}
+  .aeh-s-treated{background:#dcfce7;color:#166534;}
+  .aeh-s-closed{background:#e2e8f0;color:#334155;}
+  .aeh-s-false{background:#f1f5f9;color:#475569;border:1px dashed #94a3b8;}
+  .aeh-empty{text-align:center;padding:60px 20px;color:#94a3b8;}
+  .aeh-empty i{font-size:48px;margin-bottom:12px;display:block;color:#cbd5e1;}
+  /* Detail modal */
+  #aehDetailModal{position:fixed;inset:0;background:rgba(15,23,42,0.85);z-index:10060;display:none;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px;}
+  #aehDetailModal.show{display:flex;}
+  .aehd-card{background:#fff;border-radius:20px;width:100%;max-width:900px;overflow:hidden;box-shadow:0 25px 50px -12px rgba(0,0,0,0.35);}
+  .aehd-head{background:linear-gradient(135deg,#dc2626,#7f1d1d);color:#fff;padding:16px 22px;display:flex;justify-content:space-between;align-items:center;}
+  .aehd-head h3{margin:0;font-size:1.15em;}
+  .aehd-body{padding:20px 22px;max-height:calc(100vh - 120px);overflow-y:auto;}
+  .aehd-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:14px;}
+  .aehd-field{background:#f8fafc;border-left:4px solid #3282b8;padding:9px 12px;border-radius:8px;}
+  .aehd-field b{display:block;font-size:.7em;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;font-weight:700;}
+  .aehd-field span{color:#0f172a;font-size:.95em;word-break:break-word;}
+  .aehd-map{width:100%;height:320px;border:0;border-radius:12px;margin-top:8px;background:#f1f5f9;}
+  .aehd-status-row{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0;align-items:center;}
+  .aehd-status-row select{padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;background:#fff;}
+  .aehd-notes{width:100%;min-height:80px;padding:10px;border:1px solid #cbd5e1;border-radius:10px;font-family:inherit;font-size:13px;resize:vertical;margin-top:6px;}
+  .aehd-timeline{background:#f8fafc;border-radius:10px;padding:12px 14px;margin-top:12px;font-size:13px;color:#334155;}
+  .aehd-timeline div{padding:4px 0;border-bottom:1px dashed #e2e8f0;}
+  .aehd-timeline div:last-child{border:0;}
+  @media(max-width:640px){
+    .aeh-body{padding:14px;}
+    .aeh-head{padding:14px 16px;}
+    .aeh-head h2{font-size:1.05em;}
+    table.aeh-table{font-size:12px;}
+    .aeh-stat b{font-size:1.3em;}
+  }
+</style>
+
+<!-- Main history modal -->
+<div id="alertsHistoryModal" dir="ltr">
+  <div class="aeh-card">
+    <div class="aeh-head">
+      <h2><i class="fas fa-clipboard-list"></i> Emergency Alerts History — سجل بلاغات الطوارئ الطبية</h2>
+      <button class="aeh-close" onclick="closeAlertsHistory()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="aeh-body">
+      <!-- Stats -->
+      <div class="aeh-stats" id="aehStats">
+        <div class="aeh-stat"><b id="aehStatTotal">0</b><span>Total Alerts</span></div>
+        <div class="aeh-stat new"><b id="aehStatNew">0</b><span>New / Active</span></div>
+        <div class="aeh-stat open"><b id="aehStatOpen">0</b><span>In Progress</span></div>
+        <div class="aeh-stat closed"><b id="aehStatClosed">0</b><span>Closed</span></div>
+        <div class="aeh-stat false"><b id="aehStatFalse">0</b><span>False Alarm</span></div>
+        <div class="aeh-stat"><b id="aehStatToday">0</b><span>Today</span></div>
+        <div class="aeh-stat"><b id="aehStatWeek">0</b><span>This Week</span></div>
+        <div class="aeh-stat"><b id="aehStatMonth">0</b><span>This Month</span></div>
+        <div class="aeh-stat avg"><b id="aehStatAvg">—</b><span>Avg Response</span></div>
+      </div>
+
+      <!-- Filters -->
+      <div class="aeh-filters">
+        <input type="text" id="aehSearch" placeholder="🔍 Search name / ID / Alert #" />
+        <select id="aehFStatus">
+          <option value="">All Statuses</option>
+          <option value="New">New</option>
+          <option value="Accepted">Accepted</option>
+          <option value="Nurse En Route">Nurse En Route</option>
+          <option value="Arrived">Arrived</option>
+          <option value="Treatment Completed">Treatment Completed</option>
+          <option value="Closed">Closed</option>
+          <option value="False Alarm">False Alarm</option>
+        </select>
+        <input type="text" id="aehFCompany" placeholder="🏢 Company" />
+        <input type="text" id="aehFDept" placeholder="🏗️ Department / Project" />
+        <input type="date" id="aehFDateFrom" />
+        <input type="date" id="aehFDateTo" />
+        <button class="aeh-btn ghost" onclick="aehResetFilters()"><i class="fas fa-rotate"></i> Reset</button>
+      </div>
+
+      <!-- Actions -->
+      <div class="aeh-actions">
+        <button class="aeh-btn pdf" onclick="aehExportPDF()"><i class="fas fa-file-pdf"></i> Export PDF</button>
+        <button class="aeh-btn excel" onclick="aehExportExcel()"><i class="fas fa-file-excel"></i> Export Excel</button>
+        <button class="aeh-btn ghost" onclick="aehLoadAlerts(true)"><i class="fas fa-arrows-rotate"></i> Refresh</button>
+        <span id="aehLiveDot" style="margin-left:auto;font-size:12px;color:#64748b;display:flex;align-items:center;gap:6px;">
+          <span style="width:8px;height:8px;background:#10b981;border-radius:50%;display:inline-block;animation:aehPulse 1.5s infinite;"></span> Real-time
+        </span>
+      </div>
+
+      <div class="aeh-table-wrap">
+        <table class="aeh-table" id="aehTable">
+          <thead>
+            <tr>
+              <th>Alert #</th>
+              <th>Date / Time</th>
+              <th>Worker</th>
+              <th>Employee ID</th>
+              <th>Company</th>
+              <th>Department</th>
+              <th>Profession</th>
+              <th>Location</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Response</th>
+            </tr>
+          </thead>
+          <tbody id="aehTbody">
+            <tr><td colspan="11" class="aeh-empty"><i class="fas fa-inbox"></i>Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Detail modal -->
+<div id="aehDetailModal" dir="ltr">
+  <div class="aehd-card">
+    <div class="aehd-head">
+      <h3><i class="fas fa-notes-medical"></i> <span id="aehdTitle">Alert Details</span></h3>
+      <button class="aeh-close" onclick="aehCloseDetail()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="aehd-body" id="aehdBody"></div>
+  </div>
+</div>
+
+<style>@keyframes aehPulse{0%,100%{opacity:1;}50%{opacity:.3;}}</style>
+
+<script>
+(function(){
+  'use strict';
+  const LS_KEY_LOCAL = 'medEmgAlerts';
+  let alertsCache = {};        // id -> record
+  let attached = false;
+  let currentDetailId = null;
+
+  function isAdmin(){
+    try { return (typeof window.getCurrentRole === 'function' && window.getCurrentRole() === 'admin'); } catch(_){ return false; }
+  }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function fmtDate(ts){ if(!ts) return '—'; try{ return new Date(ts).toLocaleString('en-GB'); }catch(_){ return '—'; } }
+  function fmtDuration(ms){
+    if(!ms || ms<0) return '—';
+    const s = Math.floor(ms/1000);
+    const m = Math.floor(s/60), sec = s%60, h = Math.floor(m/60), min = m%60;
+    if(h>0) return h+'h '+min+'m';
+    if(m>0) return m+'m '+sec+'s';
+    return sec+'s';
+  }
+
+  // Normalize old statuses (Active/Acknowledged/Resolved) to new schema
+  function normalizeStatus(rec){
+    const s = (rec && rec.status) || 'New';
+    const map = { 'Active':'New', 'Acknowledged':'Accepted', 'Resolved':'Closed' };
+    return map[s] || s;
+  }
+  function statusClass(s){
+    return ({
+      'New':'aeh-s-new','Accepted':'aeh-s-accepted','Nurse En Route':'aeh-s-enroute',
+      'Arrived':'aeh-s-arrived','Treatment Completed':'aeh-s-treated',
+      'Closed':'aeh-s-closed','False Alarm':'aeh-s-false'
+    })[s] || 'aeh-s-new';
+  }
+  const STATUS_LIST = ['New','Accepted','Nurse En Route','Arrived','Treatment Completed','Closed','False Alarm'];
+
+  function getWorkerInfo(rec){
+    return {
+      name: rec.reporterName || rec.workerName || '—',
+      empId: rec.reporterIqama || rec.employeeId || rec.workerId || '—',
+      company: rec.reporterCompany || rec.company || '—',
+      dept: rec.reporterProject || rec.department || rec.project || '—',
+      profession: rec.reporterRole || rec.profession || '—',
+      phone: rec.reporterPhone || ''
+    };
+  }
+  function getLocationText(rec){
+    const lat = Number(rec.lat ?? rec.latitude), lng = Number(rec.lng ?? rec.longitude);
+    if(isFinite(lat)&&isFinite(lng)) return lat.toFixed(5)+', '+lng.toFixed(5);
+    return rec.location || '—';
+  }
+  function getMapsUrl(rec){
+    if(rec.mapsUrl) return rec.mapsUrl;
+    const lat = Number(rec.lat ?? rec.latitude), lng = Number(rec.lng ?? rec.longitude);
+    if(isFinite(lat)&&isFinite(lng)) return 'https://www.google.com/maps?q='+lat+','+lng;
+    return '';
+  }
+  function getType(rec){ return (rec.status === 'False Alarm' || rec.type === 'False Alarm') ? 'False Alarm' : 'Medical Emergency'; }
+  function responseTimeMs(rec){
+    const start = rec.createdAt;
+    const arrived = rec.arrivedAt || rec.resolvedAt || rec.acknowledgedAt;
+    if(!start || !arrived) return null;
+    return arrived - start;
+  }
+
+  // ============ Public API ============
+  window.openAlertsHistory = function(){
+    const m = document.getElementById('alertsHistoryModal');
+    m.classList.add('show');
+    attachListener();
+    aehLoadAlerts();
+  };
+  window.closeAlertsHistory = function(){
+    document.getElementById('alertsHistoryModal').classList.remove('show');
+  };
+
+  function readLocal(){
+    try { return JSON.parse(localStorage.getItem(LS_KEY_LOCAL) || '{}'); } catch(_){ return {}; }
+  }
+  function attachListener(){
+    if(attached) return;
+    const db = (typeof firebase !== 'undefined' && firebase.database) ? firebase.database() : (window.firebaseDB || null);
+    if(db && db.ref){
+      try {
+        const ref = (typeof db.ref === 'function') ? db.ref('emergency_alerts') : window.firebaseRef(db,'emergency_alerts');
+        ref.on('value', snap => {
+          alertsCache = snap.val() || {};
+          renderAll();
+        }, err => { console.warn('[AEH] listener err:', err); alertsCache = readLocal(); renderAll(); });
+        attached = true;
+      } catch(e){ console.warn('[AEH] attach failed:', e); alertsCache = readLocal(); renderAll(); attached = true; }
+    } else {
+      alertsCache = readLocal(); renderAll();
+      window.addEventListener('storage', e => { if(e.key === LS_KEY_LOCAL){ alertsCache = readLocal(); renderAll(); } });
+      attached = true;
+    }
+  }
+  window.aehLoadAlerts = function(force){
+    if(force){ attached = false; attachListener(); }
+    else renderAll();
+  };
+
+  function getFiltered(){
+    const q = (document.getElementById('aehSearch').value||'').trim().toLowerCase();
+    const fS = document.getElementById('aehFStatus').value;
+    const fC = (document.getElementById('aehFCompany').value||'').trim().toLowerCase();
+    const fD = (document.getElementById('aehFDept').value||'').trim().toLowerCase();
+    const fFrom = document.getElementById('aehFDateFrom').value;
+    const fTo = document.getElementById('aehFDateTo').value;
+    const fromTs = fFrom ? new Date(fFrom+'T00:00:00').getTime() : null;
+    const toTs = fTo ? new Date(fTo+'T23:59:59').getTime() : null;
+
+    return Object.entries(alertsCache).map(([id,rec])=>{
+      if(!rec || typeof rec !== 'object') return null;
+      const status = normalizeStatus(rec);
+      const w = getWorkerInfo(rec);
+      const alertNum = rec.alertNumber || id;
+      if(q){
+        const hay = (w.name+' '+w.empId+' '+alertNum).toLowerCase();
+        if(!hay.includes(q)) return null;
+      }
+      if(fS && status !== fS) return null;
+      if(fC && !w.company.toLowerCase().includes(fC)) return null;
+      if(fD && !w.dept.toLowerCase().includes(fD)) return null;
+      if(fromTs && (rec.createdAt||0) < fromTs) return null;
+      if(toTs && (rec.createdAt||0) > toTs) return null;
+      return {id, rec, status, worker:w, alertNum};
+    }).filter(Boolean).sort((a,b)=> (b.rec.createdAt||0)-(a.rec.createdAt||0));
+  }
+
+  function renderStats(){
+    const all = Object.values(alertsCache).filter(r => r && typeof r==='object');
+    const now = Date.now();
+    const dayStart = new Date(); dayStart.setHours(0,0,0,0);
+    const weekStart = now - 7*24*3600*1000;
+    const monthStart = now - 30*24*3600*1000;
+
+    let neu=0,inprog=0,closed=0,fa=0,today=0,week=0,month=0,respSum=0,respCount=0;
+    all.forEach(r=>{
+      const s = normalizeStatus(r);
+      if(s==='New') neu++;
+      else if(s==='Closed'||s==='Treatment Completed') closed++;
+      else if(s==='False Alarm') fa++;
+      else inprog++;
+      const ts = r.createdAt||0;
+      if(ts>=dayStart.getTime()) today++;
+      if(ts>=weekStart) week++;
+      if(ts>=monthStart) month++;
+      const rt = responseTimeMs(r);
+      if(rt){ respSum+=rt; respCount++; }
+    });
+    document.getElementById('aehStatTotal').textContent = all.length;
+    document.getElementById('aehStatNew').textContent = neu;
+    document.getElementById('aehStatOpen').textContent = inprog;
+    document.getElementById('aehStatClosed').textContent = closed;
+    document.getElementById('aehStatFalse').textContent = fa;
+    document.getElementById('aehStatToday').textContent = today;
+    document.getElementById('aehStatWeek').textContent = week;
+    document.getElementById('aehStatMonth').textContent = month;
+    document.getElementById('aehStatAvg').textContent = respCount ? fmtDuration(respSum/respCount) : '—';
+  }
+
+  function renderTable(){
+    const rows = getFiltered();
+    const tb = document.getElementById('aehTbody');
+    if(!rows.length){
+      tb.innerHTML = '<tr><td colspan="11" class="aeh-empty"><i class="fas fa-folder-open"></i>No alerts match your filters</td></tr>';
+      return;
+    }
+    tb.innerHTML = rows.map(({id,rec,status,worker,alertNum})=>{
+      const rt = responseTimeMs(rec);
+      return `<tr onclick="aehOpenDetail('${esc(id)}')">
+        <td><b>${esc(alertNum)}</b></td>
+        <td>${fmtDate(rec.createdAt)}</td>
+        <td>${esc(worker.name)}</td>
+        <td>${esc(worker.empId)}</td>
+        <td>${esc(worker.company)}</td>
+        <td>${esc(worker.dept)}</td>
+        <td>${esc(worker.profession)}</td>
+        <td>${esc(getLocationText(rec))}</td>
+        <td>${esc(getType(rec))}</td>
+        <td><span class="aeh-badge ${statusClass(status)}">${esc(status)}</span></td>
+        <td>${rt?fmtDuration(rt):'—'}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function renderAll(){ renderStats(); renderTable(); if(currentDetailId && alertsCache[currentDetailId]) renderDetail(currentDetailId); }
+
+  ['aehSearch','aehFStatus','aehFCompany','aehFDept','aehFDateFrom','aehFDateTo'].forEach(id=>{
+    document.addEventListener('input', e=>{ if(e.target && e.target.id===id) renderTable(); });
+    document.addEventListener('change', e=>{ if(e.target && e.target.id===id) renderTable(); });
+  });
+  window.aehResetFilters = function(){
+    ['aehSearch','aehFCompany','aehFDept','aehFDateFrom','aehFDateTo'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('aehFStatus').value='';
+    renderTable();
+  };
+
+  // ============ Detail view ============
+  window.aehOpenDetail = function(id){
+    currentDetailId = id;
+    document.getElementById('aehDetailModal').classList.add('show');
+    renderDetail(id);
+  };
+  window.aehCloseDetail = function(){
+    currentDetailId = null;
+    document.getElementById('aehDetailModal').classList.remove('show');
+  };
+
+  function renderDetail(id){
+    const rec = alertsCache[id]; if(!rec) return;
+    const status = normalizeStatus(rec);
+    const w = getWorkerInfo(rec);
+    const lat = Number(rec.lat ?? rec.latitude), lng = Number(rec.lng ?? rec.longitude);
+    const hasCoords = isFinite(lat) && isFinite(lng);
+    const admin = isAdmin();
+    document.getElementById('aehdTitle').textContent = 'Alert #' + (rec.alertNumber || id);
+
+    const nurseCoords = rec.nurseStartLat && rec.nurseStartLng ? (rec.nurseStartLat+','+rec.nurseStartLng) : null;
+    const mapSrc = hasCoords
+      ? (nurseCoords
+          ? `https://maps.google.com/maps?saddr=${nurseCoords}&daddr=${lat},${lng}&output=embed`
+          : `https://maps.google.com/maps?q=${lat},${lng}&z=17&output=embed`)
+      : '';
+
+    document.getElementById('aehdBody').innerHTML = `
+      <div class="aehd-grid">
+        <div class="aehd-field"><b>Alert #</b><span>${esc(rec.alertNumber || id)}</span></div>
+        <div class="aehd-field"><b>Date / Time</b><span>${fmtDate(rec.createdAt)}</span></div>
+        <div class="aehd-field"><b>Type</b><span>${esc(getType(rec))}</span></div>
+        <div class="aehd-field"><b>Worker Name</b><span>${esc(w.name)}</span></div>
+        <div class="aehd-field"><b>Employee ID / Iqama</b><span>${esc(w.empId)}</span></div>
+        <div class="aehd-field"><b>Company</b><span>${esc(w.company)}</span></div>
+        <div class="aehd-field"><b>Department / Project</b><span>${esc(w.dept)}</span></div>
+        <div class="aehd-field"><b>Profession</b><span>${esc(w.profession)}</span></div>
+        <div class="aehd-field"><b>Phone</b><span>${w.phone?('<a href="tel:'+esc(w.phone)+'">'+esc(w.phone)+'</a>'):'—'}</span></div>
+        <div class="aehd-field"><b>Location</b><span>${esc(getLocationText(rec))} ${getMapsUrl(rec)?('&nbsp;<a href="'+esc(getMapsUrl(rec))+'" target="_blank">🗺️ Open</a>'):''}</span></div>
+      </div>
+
+      <div class="aehd-status-row">
+        <b style="font-size:.9em;color:#334155;">Status:</b>
+        <span class="aeh-badge ${statusClass(status)}" id="aehdBadge">${esc(status)}</span>
+        <select id="aehdStatusSel">
+          ${STATUS_LIST.map(s=>`<option value="${s}" ${s===status?'selected':''}>${s}</option>`).join('')}
+        </select>
+        <button class="aeh-btn primary" onclick="aehUpdateStatus()"><i class="fas fa-save"></i> Update Status</button>
+        ${admin?'<button class="aeh-btn ghost" style="background:#fee2e2;color:#991b1b;border-color:#fecaca;" onclick="aehDeleteAlert()"><i class="fas fa-trash"></i> Delete (Admin)</button>':''}
+      </div>
+
+      <div class="aehd-timeline">
+        <div><b>🕐 Alert Created:</b> ${fmtDate(rec.createdAt)}</div>
+        <div><b>🚑 Nurse Response Time:</b> ${fmtDate(rec.acknowledgedAt || rec.nurseResponseAt)}</div>
+        <div><b>📍 Nurse Arrived at Location:</b> ${fmtDate(rec.arrivedAt)}</div>
+        <div><b>⏱️ Response Duration:</b> ${fmtDuration(responseTimeMs(rec))}</div>
+        <div><b>✅ Treatment Completed:</b> ${fmtDate(rec.treatmentCompletedAt)}</div>
+        <div><b>🔒 Closed At:</b> ${fmtDate(rec.closedAt || rec.resolvedAt)}</div>
+      </div>
+
+      <div style="margin-top:14px;">
+        <b style="font-size:.85em;color:#334155;">📝 Nurse Notes</b>
+        <textarea id="aehdNotes" class="aehd-notes" placeholder="Add nurse notes / observations...">${esc(rec.nurseNote || rec.nurseNotes || '')}</textarea>
+        <button class="aeh-btn primary" style="margin-top:6px;" onclick="aehSaveNotes()"><i class="fas fa-save"></i> Save Notes</button>
+      </div>
+
+      ${hasCoords?`<div style="margin-top:16px;">
+        <b style="font-size:.85em;color:#334155;display:block;margin-bottom:6px;">🗺️ Location Map ${nurseCoords?'(with nurse route)':''}</b>
+        <iframe src="${mapSrc}" class="aehd-map" loading="lazy"></iframe>
+      </div>`:''}
+    `;
+  }
+
+  function dbUpdate(id, upd){
+    const db = (typeof firebase !== 'undefined' && firebase.database) ? firebase.database() : null;
+    if(db){
+      db.ref('emergency_alerts/'+id).update(upd).catch(e=>alert('Update failed: '+e.message));
+    } else {
+      const all = readLocal();
+      if(all[id]){ Object.assign(all[id], upd); localStorage.setItem(LS_KEY_LOCAL, JSON.stringify(all)); alertsCache = all; renderAll(); }
+    }
+  }
+
+  window.aehUpdateStatus = function(){
+    if(!currentDetailId) return;
+    const newS = document.getElementById('aehdStatusSel').value;
+    const now = Date.now();
+    const upd = { status: newS };
+    if(newS==='Accepted' || newS==='Nurse En Route') upd.acknowledgedAt = alertsCache[currentDetailId].acknowledgedAt || now;
+    if(newS==='Arrived') upd.arrivedAt = now;
+    if(newS==='Treatment Completed') upd.treatmentCompletedAt = now;
+    if(newS==='Closed') upd.closedAt = now;
+    if(newS==='False Alarm') upd.closedAt = now;
+    dbUpdate(currentDetailId, upd);
+  };
+  window.aehSaveNotes = function(){
+    if(!currentDetailId) return;
+    const v = document.getElementById('aehdNotes').value;
+    dbUpdate(currentDetailId, { nurseNote: v });
+    const btn = event && event.target; if(btn){ btn.innerHTML='<i class="fas fa-check"></i> Saved'; setTimeout(()=>btn.innerHTML='<i class="fas fa-save"></i> Save Notes',1500); }
+  };
+  window.aehDeleteAlert = function(){
+    if(!currentDetailId) return;
+    if(!isAdmin()){ alert('Only Admin can delete alerts.'); return; }
+    if(!confirm('⚠️ Permanently delete this alert? This cannot be undone.')) return;
+    const db = (typeof firebase !== 'undefined' && firebase.database) ? firebase.database() : null;
+    if(db){
+      db.ref('emergency_alerts/'+currentDetailId).remove().then(()=>{ aehCloseDetail(); }).catch(e=>alert('Delete failed: '+e.message));
+    } else {
+      const all = readLocal(); delete all[currentDetailId]; localStorage.setItem(LS_KEY_LOCAL, JSON.stringify(all));
+      alertsCache = all; aehCloseDetail(); renderAll();
+    }
+  };
+
+  // ============ Export ============
+  window.aehExportExcel = function(){
+    const rows = getFiltered();
+    const headers = ['Alert #','Date/Time','Worker Name','Employee ID','Company','Department','Profession','Location','Type','Status','Response Time','Nurse Notes','Closed At'];
+    const data = [headers].concat(rows.map(({rec,status,worker,alertNum})=>[
+      alertNum, fmtDate(rec.createdAt), worker.name, worker.empId, worker.company, worker.dept, worker.profession,
+      getLocationText(rec), getType(rec), status, fmtDuration(responseTimeMs(rec)),
+      (rec.nurseNote||'').replace(/[\r\n\t]/g,' '), fmtDate(rec.closedAt||rec.resolvedAt)
+    ]));
+    const csv = data.map(r=>r.map(c=>{
+      const s = String(c==null?'':c); return /[",\n;]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+    }).join(',')).join('\n');
+    const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'emergency-alerts-history-'+new Date().toISOString().slice(0,10)+'.csv';
+    a.click();
+  };
+
+  window.aehExportPDF = function(){
+    if(typeof window.jspdf === 'undefined' || !window.jspdf.jsPDF){ alert('PDF library not loaded'); return; }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({orientation:'landscape', unit:'pt', format:'a4'});
+    doc.setFontSize(16); doc.setTextColor('#0f4c75');
+    doc.text('Emergency Alerts History', 40, 40);
+    doc.setFontSize(10); doc.setTextColor('#64748b');
+    doc.text('Generated: '+new Date().toLocaleString('en-GB'), 40, 58);
+    const rows = getFiltered();
+    const body = rows.map(({rec,status,worker,alertNum})=>[
+      alertNum, fmtDate(rec.createdAt), worker.name, worker.empId, worker.company, worker.dept,
+      getLocationText(rec), getType(rec), status, fmtDuration(responseTimeMs(rec))
+    ]);
+    if(doc.autoTable){
+      doc.autoTable({
+        head: [['Alert #','Date/Time','Worker','Emp ID','Company','Dept','Location','Type','Status','Response']],
+        body: body, startY: 75,
+        headStyles:{fillColor:[15,76,117], textColor:255, fontSize:9},
+        bodyStyles:{fontSize:8, textColor:[51,65,85]},
+        alternateRowStyles:{fillColor:[248,250,252]},
+        margin:{left:40,right:40}
+      });
+    } else {
+      let y = 80; doc.setFontSize(9); doc.setTextColor('#334155');
+      body.forEach(r=>{ doc.text(r.join(' | '), 40, y); y+=14; if(y>560){ doc.addPage(); y=40; } });
+    }
+    doc.save('emergency-alerts-history-'+new Date().toISOString().slice(0,10)+'.pdf');
+  };
+
+  // Close on ESC / backdrop
+  document.addEventListener('keydown', e=>{
+    if(e.key==='Escape'){
+      if(document.getElementById('aehDetailModal').classList.contains('show')) aehCloseDetail();
+      else if(document.getElementById('alertsHistoryModal').classList.contains('show')) closeAlertsHistory();
+    }
+  });
+  document.getElementById('alertsHistoryModal').addEventListener('click', e=>{ if(e.target.id==='alertsHistoryModal') closeAlertsHistory(); });
+  document.getElementById('aehDetailModal').addEventListener('click', e=>{ if(e.target.id==='aehDetailModal') aehCloseDetail(); });
+})();
+</script>
+<!-- ================== END EMERGENCY ALERTS HISTORY MODULE ================== -->
 
 </body>
 </html>
