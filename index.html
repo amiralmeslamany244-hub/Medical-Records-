@@ -5772,6 +5772,24 @@ body.splash-active{overflow:hidden;}
 <style id="injuryPrintHeaderFooterBase">
 #injuryPrintHeader, #injuryPrintFooter { display: none; }
 </style>
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#0f4c75">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Med Records">
+    <link rel="apple-touch-icon" href="/icon-512.png" sizes="512x512">
+    <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192">
+    <link rel="icon" href="/icon-512.png" type="image/png" sizes="512x512">
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/sw.js').catch(function (err) {
+            console.warn('SW registration failed:', err);
+          });
+        });
+      }
+    </script>
 </head>
 <body>
 
@@ -5788,7 +5806,7 @@ body.splash-active{overflow:hidden;}
   }
   #auth-overlay.hidden{ display:none !important; }
   body.auth-locked{ overflow:hidden; }
-  body.auth-locked > *:not(#auth-overlay):not(script):not(style){ filter: blur(6px); pointer-events:none; user-select:none; }
+  body.auth-locked > *:not(#auth-overlay):not(#ertOverlay):not(script):not(style){ filter: blur(6px); pointer-events:none; user-select:none; } body.auth-locked.ert-standalone-page > *{ filter:none !important; pointer-events:auto !important; user-select:auto !important; }
 
   /* ---- Left decorative panel ---- */
   .auth-hero{
@@ -8527,6 +8545,121 @@ window.YMCO_showSplash = function(){
             return html;
         }
 
+        function _injMapSavedToD(report, worker) {
+            const d = (report && report.data) || {};
+            const w = worker || {};
+            let bodyParts = [];
+            const bps = d.body_parts_selected;
+            if (typeof bps === 'string' && bps) {
+                bodyParts = bps.split('|').map(s => (s.split(':')[0] || '').trim()).filter(Boolean);
+            } else if (Array.isArray(bps)) {
+                bodyParts = bps.slice();
+            }
+            const asArr = v => Array.isArray(v) ? v.slice() : (v ? [String(v)] : []);
+            let dateStr = d.injury_report_date || '';
+            let timeStr = d.injury_report_time || '';
+            const effDate = (report && report.date) || '';
+            if (!dateStr && effDate) {
+                try { const dt = new Date(effDate); if (!isNaN(dt)) { dateStr = dt.toISOString().slice(0,10); if (!timeStr) timeStr = dt.toTimeString().slice(0,5); } } catch(e){}
+            }
+            return {
+                reportName: (report && report.name) || d.injuryReportName || '',
+                date: dateStr,
+                time: timeStr,
+                refNo: d.report_ref_no || '',
+                kind: asArr(d.injury_kind),
+                ip: {
+                    name: d.injury_ip_fullname || w.name || '',
+                    nationality: d.injury_ip_nationality || w.nationality || '',
+                    empId: d.injury_ip_iqama || w.id || '',
+                    phone: d.injury_ip_phone || w.phone || '',
+                    age: d.injury_ip_age || w.age || '',
+                    dob: d.injury_ip_dob || w.dob || '',
+                    job: d.injury_ip_job_role || w.role || '',
+                    project: d.injury_ip_project_site || w.project || '',
+                    company: d.injury_ip_company || w.company || '',
+                    foreman: d.foreman_name || '',
+                },
+                bodyParts,
+                bodyFront: '', bodyBack: '',
+                injuryPhoto: d.injury_photo_data || '',
+                idPhoto: d.id_photo_data || w.id_photo_data || w.idPhoto || w.photo || '',
+                injuryTypes: asArr(d.injury_type_detail),
+                othersInjuryText: d.others_injury_text || '',
+                illness: asArr(d.illness_type),
+                causes: asArr(d.cause),
+                othersCauseText: d.others_cause_text || '',
+                details: d.injury_details || '',
+                treatment: d.treatment_action || '',
+                statusIp: asArr(d.status_ip),
+                remarks: d.remarks || '',
+                reporter: {
+                    name: d.reporter_name_print || '',
+                    signature: d.reporter_signature || '',
+                    license: d.reporter_license || '',
+                    date: d.reporter_date || '',
+                },
+                reviewer: {
+                    name: d.reviewer_name_print || '',
+                    signature: d.reviewer_signature || '',
+                    empId: d.reviewer_emp_id || '',
+                    date: d.reviewer_date || '',
+                },
+            };
+        }
+
+        function _injBuildExportSection(report, worker) {
+            const d = _injMapSavedToD(report, worker);
+            const esc = (typeof _injHtmlEsc === 'function') ? _injHtmlEsc : _escapeHtml;
+            const nl2br = (s) => esc(s || '').replace(/\r?\n/g, '<br>');
+            const chipList = (arr) => (arr && arr.length)
+                ? '<ul class="inj-chips">' + arr.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>'
+                : '<span class="inj-muted">\u2014 none \u2014</span>';
+            const kv = (label, val) => '<div class="inj-kv"><span class="k">' + esc(label) + '</span><span class="v">' + esc(val || '\u2014') + '</span></div>';
+            const injuryTypes = d.injuryTypes.slice(); if (d.othersInjuryText) injuryTypes.push('Others: ' + d.othersInjuryText);
+            const causes = d.causes.slice(); if (d.othersCauseText) causes.push('Others: ' + d.othersCauseText);
+            const photoBlocks = [];
+            if (d.injuryPhoto) photoBlocks.push('<figure><img src="' + esc(d.injuryPhoto) + '" alt="Injury photo" crossorigin="anonymous" referrerpolicy="no-referrer"><figcaption>Injury Photo</figcaption></figure>');
+            if (d.idPhoto)     photoBlocks.push('<figure><img src="' + esc(d.idPhoto)     + '" alt="Worker ID photo" crossorigin="anonymous" referrerpolicy="no-referrer"><figcaption>Worker ID (Iqama)</figcaption></figure>');
+            const photoSection = photoBlocks.length
+                ? '<section class="inj-block"><h2>Photographic Evidence</h2><div class="inj-photo-grid">' + photoBlocks.join('') + '</div></section>'
+                : '';
+            return '<div class="inj-export-report">'
+                + '<header class="inj-header"><div class="inj-brand"><img src="' + YMCO_LOGO_DATA_URL + '" alt="YMCO Medical"><div class="inj-title-wrap">'
+                + '<h1>Occupational Injury &amp; Illness Report</h1>'
+                + '<div class="inj-sub">YMCO Medical Records' + (d.reportName ? ' &middot; ' + esc(d.reportName) : '') + '</div>'
+                + '<span class="inj-tag">Incident Report</span></div></div>'
+                + '<div class="inj-meta">'
+                + '<div><b>Date:</b> ' + esc(d.date || '\u2014') + '</div>'
+                + '<div><b>Time:</b> ' + esc(d.time || '\u2014') + '</div>'
+                + '<div><b>Ref No:</b> ' + esc(d.refNo || '\u2014') + '</div>'
+                + '</div></header>'
+                + '<section class="inj-block"><h2>Kind of Injury</h2>' + chipList(d.kind) + '</section>'
+                + '<section class="inj-block"><h2>Injured Person (IP)</h2><div class="inj-grid-2">'
+                +   kv('Full Name', d.ip.name) + kv('Nationality', d.ip.nationality)
+                +   kv('Employee ID', d.ip.empId) + kv('Phone', d.ip.phone)
+                +   kv('Age', d.ip.age) + kv('Date of Birth', d.ip.dob)
+                + '</div></section>'
+                + '<section class="inj-block"><h2>Work Details</h2><div class="inj-grid-2">'
+                +   kv('Job Title', d.ip.job) + kv('Project / Site', d.ip.project)
+                +   kv('Company', d.ip.company) + kv('Foreman', d.ip.foreman)
+                + '</div></section>'
+                + '<section class="inj-block"><h2>Body Part(s) Injured</h2>' + chipList(d.bodyParts) + '</section>'
+                + photoSection
+                + '<section class="inj-block"><h2>Type of Injury</h2>' + chipList(injuryTypes) + '</section>'
+                + '<section class="inj-block"><h2>Type of Illness</h2>' + chipList(d.illness) + '</section>'
+                + '<section class="inj-block"><h2>Cause of Injury / Illness</h2>' + chipList(causes) + '</section>'
+                + '<section class="inj-block"><h2>Details of Injury / Illness</h2><div class="inj-note">' + (d.details ? nl2br(d.details) : '<span class="inj-muted">\u2014</span>') + '</div></section>'
+                + '<section class="inj-block"><h2>Treatment Action</h2><div class="inj-note">' + (d.treatment ? nl2br(d.treatment) : '<span class="inj-muted">\u2014</span>') + '</div></section>'
+                + '<section class="inj-block"><h2>Present Status of IP</h2>' + chipList(d.statusIp) + '</section>'
+                + '<section class="inj-block"><h2>Remarks</h2><div class="inj-note">' + (d.remarks ? nl2br(d.remarks) : '<span class="inj-muted">\u2014</span>') + '</div></section>'
+                + '<section class="inj-signatures">'
+                +   '<div class="inj-sig-box"><h3>Reported by</h3>' + kv('Name', d.reporter.name) + kv('License / ID', d.reporter.license) + kv('Date', d.reporter.date) + '<div class="inj-sig-name">' + esc(d.reporter.signature || '') + '</div><div class="inj-sig-line">Project Nurse / Paramedic \u2014 Name &amp; Signature</div></div>'
+                +   '<div class="inj-sig-box"><h3>Reviewed by (PMC)</h3>' + kv('Name', d.reviewer.name) + kv('Employee ID', d.reviewer.empId) + kv('Date', d.reviewer.date) + '<div class="inj-sig-name">' + esc(d.reviewer.signature || '') + '</div><div class="inj-sig-line">Safety Manager / PMC \u2014 Name &amp; Signature</div></div>'
+                + '</section>'
+                + '</div>';
+        }
+
         function previewExportData() {
             try {
                 const fromVal = (document.getElementById('exportFromDate') || {}).value || '';
@@ -8746,7 +8879,7 @@ window.YMCO_showSplash = function(){
                     }
 
                     if (includeInj && inj.length > 0) {
-                        html += _reportRowsHtml(inj, [], 'injury', w);
+                        inj.forEach(r => { html += _injBuildExportSection(r, w); });
                     }
                 });
 
@@ -8934,6 +9067,40 @@ window.YMCO_showSplash = function(){
                             .worker-card-header { box-shadow: inset 0 -2px 0 rgba(0,0,0,0.08); }
                             .section-title { box-shadow: 0 1px 2px rgba(15,76,117,0.05); }
                         }
+
+                        /* === Injury report — mirror of standalone injury PDF layout === */
+                        .inj-export-report { page-break-before: always; break-before: page; padding: 6px 4px 12px; margin: 0; font-family: 'Inter','Segoe UI',Arial,sans-serif; color:#0f172a; }
+                        .inj-export-report:first-of-type { page-break-before: auto; break-before: auto; }
+                        .inj-export-report .inj-header { position:relative; padding:11px 14px 12px; margin-bottom:14px; border-radius:8px; background:linear-gradient(135deg,#fff5f5 0%,#fef2f2 60%,#fee2e2 100%); border:1px solid #fecaca; border-left:5px solid #dc2626; display:flex; justify-content:space-between; align-items:center; gap:14px; page-break-inside:avoid; break-inside:avoid; box-shadow:0 1px 0 rgba(220,38,38,0.04); }
+                        .inj-export-report .inj-header::after { content:""; position:absolute; left:0; right:0; bottom:-1px; height:3px; background:linear-gradient(90deg,#dc2626 0%,#0f4c75 60%,#0a2a5e 100%); border-radius:0 0 8px 8px; }
+                        .inj-export-report .inj-brand { display:flex; align-items:center; gap:12px; min-width:0; }
+                        .inj-export-report .inj-brand img { height:14mm; width:auto; flex-shrink:0; }
+                        .inj-export-report .inj-title-wrap { min-width:0; }
+                        .inj-export-report .inj-title-wrap h1 { margin:0; font-family:'Playfair Display',Georgia,serif; font-size:17pt; font-weight:900; color:#0a2a5e; letter-spacing:.3px; line-height:1.1; }
+                        .inj-export-report .inj-sub { font-size:8.5pt; color:#475569; margin-top:3px; font-weight:500; text-transform:uppercase; letter-spacing:1.2px; }
+                        .inj-export-report .inj-tag { display:inline-block; margin-top:5px; padding:2px 9px; border-radius:10px; background:#dc2626; color:#fff; font-size:7.5pt; font-weight:700; letter-spacing:1px; text-transform:uppercase; }
+                        .inj-export-report .inj-meta { text-align:right; font-size:9pt; color:#1e293b; white-space:nowrap; border-left:1px dashed #fecaca; padding-left:14px; }
+                        .inj-export-report .inj-meta div { margin:2px 0; } .inj-export-report .inj-meta b { color:#dc2626; font-weight:700; letter-spacing:.2px; }
+                        .inj-export-report .inj-block { border:1px solid #d6e4ef; border-radius:7px; padding:9px 11px 8px; margin:8px 0; background:#ffffff; page-break-inside:avoid; break-inside:avoid; box-shadow:0 1px 2px rgba(15,76,117,0.04); }
+                        .inj-export-report .inj-block h2 { margin:0 0 7px; font-size:9.5pt; color:#0f4c75; font-weight:700; border-bottom:1px solid #e2e8f0; padding:0 0 4px 10px; letter-spacing:.5px; position:relative; text-transform:uppercase; }
+                        .inj-export-report .inj-block h2::before { content:""; position:absolute; left:0; top:1px; bottom:6px; width:3px; background:linear-gradient(180deg,#dc2626,#0f4c75); border-radius:2px; }
+                        .inj-export-report .inj-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:4px 20px; }
+                        .inj-export-report .inj-kv { display:flex; gap:6px; padding:3px 0; border-bottom:1px dotted #e5e7eb; }
+                        .inj-export-report .inj-kv .k { color:#64748b; min-width:38mm; font-weight:600; font-size:8.8pt; text-transform:uppercase; letter-spacing:.3px; }
+                        .inj-export-report .inj-kv .v { color:#0f172a; flex:1; word-break:break-word; font-weight:500; }
+                        .inj-export-report .inj-chips { list-style:none; padding:0; margin:2px 0 0; display:flex; flex-wrap:wrap; gap:5px 6px; }
+                        .inj-export-report .inj-chips li { border:1px solid #bfdbfe; border-radius:12px; padding:2px 10px; font-size:8.8pt; background:linear-gradient(135deg,#eff6ff,#dbeafe); color:#1e3a8a; font-weight:600; }
+                        .inj-export-report .inj-muted { color:#94a3b8; font-style:italic; font-size:9.5pt; }
+                        .inj-export-report .inj-note { white-space:pre-wrap; min-height:14mm; border:1px solid #e2e8f0; border-left:3px solid #dc2626; border-radius:4px; padding:8px 10px; background:#fbfcfe; font-size:9.8pt; color:#1e293b; line-height:1.5; }
+                        .inj-export-report .inj-photo-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+                        .inj-export-report .inj-photo-grid figure { margin:0; text-align:center; padding:6px; background:#f8fbfd; border:1px solid #d6e4ef; border-radius:6px; }
+                        .inj-export-report .inj-photo-grid img { max-width:100%; max-height:80mm; height:auto; border-radius:4px; object-fit:contain; background:#fff; border:2px solid #0f4c75; padding:3px; box-shadow:0 2px 4px rgba(15,76,117,0.15); }
+                        .inj-export-report .inj-photo-grid figcaption { font-size:8.5pt; color:#0f4c75; margin-top:4px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; }
+                        .inj-export-report .inj-signatures { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px; page-break-inside:avoid; break-inside:avoid; }
+                        .inj-export-report .inj-sig-box { border:1px solid #d6e4ef; border-radius:7px; padding:10px 12px; background:linear-gradient(135deg,#ffffff 0%,#f8fbfd 100%); page-break-inside:avoid; break-inside:avoid; box-shadow:0 1px 2px rgba(15,76,117,0.05); }
+                        .inj-export-report .inj-sig-box h3 { margin:0 0 6px; font-size:9.5pt; color:#0f4c75; font-weight:700; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid #e2e8f0; padding-bottom:4px; }
+                        .inj-export-report .inj-sig-line { margin-top:6px; border-top:1.5px solid #475569; padding-top:4px; font-size:8pt; color:#64748b; text-align:center; font-style:italic; letter-spacing:.3px; }
+                        .inj-export-report .inj-sig-name { font-family:'Brush Script MT','Segoe Script',cursive; font-size:18pt; color:#1e3a8a; min-height:14mm; padding:3mm 0; }
 
                     </style></head><body>
                     <div class="toolbar">
@@ -17753,6 +17920,7 @@ window.toggleInjuryPrintPreview = function(){
   function clearMsg(){ msgBox.className='auth-msg'; msgBox.textContent=''; }
 
   function lockUI(){
+    try { if (new URLSearchParams(location.search).get('page') === 'medical-tracking') return; } catch(_){ }
     overlay.classList.remove('hidden');
     document.body.classList.add('auth-locked');
     widget.classList.remove('show');
@@ -20382,8 +20550,13 @@ window.toggleInjuryPrintPreview = function(){
   #medEmgModal.modal-overlay,
   #medEmgNurseAlert,
   #medEmgConfirmModal,
-  #medEmgSuccessModal { display:none; position:fixed; inset:0; z-index:100000; align-items:center; justify-content:center; background:rgba(0,0,0,.55); }
-  #medEmgModal.show, #medEmgNurseAlert.show, #medEmgConfirmModal.show, #medEmgSuccessModal.show { display:flex; }
+  #medEmgSuccessModal,
+  #medEmgSendingModal,
+  #medEmgCountdownModal,
+  #medEmgCancelledModal { display:none; position:fixed; inset:0; z-index:100000; align-items:center; justify-content:center; background:rgba(0,0,0,.55); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+  #medEmgModal.show, #medEmgNurseAlert.show, #medEmgConfirmModal.show, #medEmgSuccessModal.show,
+  #medEmgSendingModal.show, #medEmgCountdownModal.show, #medEmgCancelledModal.show { display:flex !important; animation:medEmgFade .25s ease-out; }
+  @keyframes medEmgFade { from{opacity:0} to{opacity:1} }
   .med-emg-card { background:#fff; border-radius:20px; padding:28px; max-width:520px; width:92%; max-height:92vh; overflow:auto; box-shadow:0 25px 60px rgba(0,0,0,.4); }
   .med-emg-card h2 { display:flex; align-items:center; gap:10px; color:#dc2626; margin-bottom:14px; font-size:22px; }
   .med-emg-btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; border:none; border-radius:14px; padding:14px 18px; font-weight:700; cursor:pointer; font-size:15px; transition:all .2s; }
@@ -20404,32 +20577,86 @@ window.toggleInjuryPrintPreview = function(){
   .med-emg-alert-inner .actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
 
   /* Public emergency page (full takeover) */
-  body.med-emg-public-page { margin:0; padding:0; background:linear-gradient(135deg,#fff1f2 0%,#fee2e2 55%,#fecaca 100%); font-family:'Inter',system-ui,-apple-system,sans-serif; min-height:100vh; }
-  .med-emg-public { min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding:24px 16px 48px; text-align:center; }
-  .med-emg-public .brand-bar { display:inline-flex; align-items:center; justify-content:center; gap:8px; font-size:12px; font-weight:700; letter-spacing:1px; color:#7f1d1d; background:#fff; padding:8px 16px; border-radius:999px; box-shadow:0 4px 14px rgba(127,29,29,.08); margin-bottom:16px; border:1px solid #fecaca; }
-  .med-emg-public .brand-bar .dot { width:8px; height:8px; border-radius:50%; background:#dc2626; animation:medEmgBlink 1s infinite; }
-  @keyframes medEmgBlink { 0%,100%{opacity:1;} 50%{opacity:.25;} }
-  .med-emg-public .icon-wrap { width:104px; height:104px; border-radius:50%; background:linear-gradient(135deg,#ef4444,#7f1d1d); color:#fff; display:flex; align-items:center; justify-content:center; font-size:52px; box-shadow:0 20px 50px rgba(220,38,38,.4), inset 0 -6px 20px rgba(0,0,0,.15); margin-bottom:14px; animation:medEmgHeart 1.4s ease-in-out infinite; }
-  @keyframes medEmgHeart { 0%,100%{transform:scale(1);} 50%{transform:scale(1.08);} }
-  .med-emg-public .title-stack { display:flex; flex-direction:column; gap:4px; margin-bottom:18px; }
-  .med-emg-public .title-stack h1 { color:#7f1d1d; font-size:24px; font-weight:800; margin:0; line-height:1.3; letter-spacing:-.5px; }
-  .med-emg-public .title-stack h2 { color:#991b1b; font-size:16px; font-weight:700; margin:0; opacity:.9; }
-  .med-emg-public .panel { background:#fff; border-radius:22px; padding:18px 16px; width:100%; max-width:460px; box-shadow:0 12px 32px rgba(127,29,29,.10); border:1px solid #fecaca; margin-bottom:14px; text-align:start; }
-  .med-emg-public .panel-title { display:flex; align-items:center; gap:8px; font-size:12px; font-weight:800; color:#7f1d1d; margin-bottom:12px; text-transform:uppercase; letter-spacing:.6px; }
-  .med-emg-public .panel-title i { color:#dc2626; }
-  .med-emg-public .panel-title .opt-tag { margin-inline-start:auto; font-size:10px; font-weight:700; color:#64748b; background:#f1f5f9; padding:3px 8px; border-radius:999px; letter-spacing:.3px; text-transform:none; }
-  .med-emg-public .lang-cards { display:flex; flex-direction:column; gap:8px; }
-  .med-emg-public .lang-card { background:#fef2f2; border:1px solid #fecaca; border-radius:12px; padding:12px 14px; text-align:start; }
-  .med-emg-public .lang-card .lang-tag { display:inline-block; font-size:10px; font-weight:800; color:#fff; background:linear-gradient(135deg,#dc2626,#7f1d1d); padding:3px 10px; border-radius:999px; letter-spacing:.8px; margin-bottom:6px; }
-  .med-emg-public .lang-card p { color:#334155; font-size:14px; line-height:1.7; margin:0; }
+  body.med-emg-public-page {
+    margin:0; padding:0; min-height:100vh;
+    background:
+      radial-gradient(1200px 600px at 10% -10%, rgba(255,255,255,.9), transparent 60%),
+      radial-gradient(900px 500px at 110% 10%, rgba(254,202,202,.7), transparent 55%),
+      linear-gradient(160deg,#fff7f7 0%, #fee2e2 45%, #fecaca 100%);
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+    color:#0f172a;
+    -webkit-font-smoothing:antialiased;
+  }
+  body.med-emg-public-page::before{
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background-image:
+      radial-gradient(circle at 20% 30%, rgba(220,38,38,.06) 0 1px, transparent 2px),
+      radial-gradient(circle at 80% 70%, rgba(127,29,29,.05) 0 1px, transparent 2px);
+    background-size: 26px 26px, 34px 34px;
+    mask-image: linear-gradient(180deg, rgba(0,0,0,.6), rgba(0,0,0,0) 80%);
+  }
+  .med-emg-public { position:relative; z-index:1; min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding:22px 16px 60px; text-align:center; }
 
-  /* Reporter Iqama field */
+  .med-emg-public .brand-bar {
+    display:inline-flex; align-items:center; justify-content:center; gap:10px;
+    font-size:11.5px; font-weight:800; letter-spacing:1.4px; color:#7f1d1d;
+    background:rgba(255,255,255,.9); padding:9px 18px; border-radius:999px;
+    box-shadow: 0 6px 20px rgba(127,29,29,.10), inset 0 0 0 1px rgba(254,202,202,.9);
+    margin-bottom:18px; backdrop-filter: blur(10px);
+  }
+  .med-emg-public .brand-bar .dot { width:9px; height:9px; border-radius:50%; background:#dc2626; box-shadow:0 0 0 0 rgba(220,38,38,.7); animation:medEmgPing 1.4s ease-out infinite; }
+  @keyframes medEmgPing { 0%{box-shadow:0 0 0 0 rgba(220,38,38,.6)} 70%{box-shadow:0 0 0 10px rgba(220,38,38,0)} 100%{box-shadow:0 0 0 0 rgba(220,38,38,0)} }
+
+  .med-emg-public .icon-wrap {
+    width:112px; height:112px; border-radius:50%;
+    background:
+      radial-gradient(circle at 30% 25%, rgba(255,255,255,.5), transparent 45%),
+      linear-gradient(135deg,#ef4444 0%,#dc2626 55%,#7f1d1d 100%);
+    color:#fff; display:flex; align-items:center; justify-content:center; font-size:54px;
+    box-shadow:
+      0 24px 55px rgba(220,38,38,.45),
+      0 0 0 8px rgba(255,255,255,.65),
+      0 0 0 9px rgba(254,202,202,.9),
+      inset 0 -8px 22px rgba(0,0,0,.18);
+    margin-bottom:16px; animation:medEmgHeart 1.6s ease-in-out infinite;
+  }
+
+  .med-emg-public .title-stack { display:flex; flex-direction:column; gap:6px; margin-bottom:22px; max-width:520px; }
+  .med-emg-public .title-stack h1 { color:#7f1d1d; font-size:26px; font-weight:900; margin:0; line-height:1.25; letter-spacing:-.3px; }
+  .med-emg-public .title-stack h2 { color:#991b1b; font-size:15px; font-weight:700; margin:0; opacity:.92; letter-spacing:.2px; }
+
+  .med-emg-public .panel {
+    position:relative; background:rgba(255,255,255,.92); border-radius:24px; padding:20px 18px;
+    width:100%; max-width:480px; margin-bottom:16px; text-align:start;
+    box-shadow: 0 18px 40px rgba(127,29,29,.10), 0 2px 6px rgba(127,29,29,.05), inset 0 0 0 1px rgba(254,226,226,.9);
+    backdrop-filter: blur(12px);
+  }
+  .med-emg-public .panel::before{
+    content:""; position:absolute; top:0; left:20px; right:20px; height:3px; border-radius:0 0 4px 4px;
+    background:linear-gradient(90deg, transparent, #dc2626, transparent);
+    opacity:.55;
+  }
+
+  .med-emg-public .panel-title { display:flex; align-items:center; gap:9px; font-size:12px; font-weight:800; color:#7f1d1d; margin-bottom:14px; text-transform:uppercase; letter-spacing:.7px; }
+  .med-emg-public .panel-title i { color:#dc2626; font-size:14px; }
+  .med-emg-public .panel-title .opt-tag { margin-inline-start:auto; font-size:10px; font-weight:700; color:#64748b; background:#f1f5f9; padding:3px 9px; border-radius:999px; letter-spacing:.3px; text-transform:none; }
+
+  .med-emg-public .lang-cards { display:flex; flex-direction:column; gap:10px; }
+  .med-emg-public .lang-card {
+    background:linear-gradient(180deg,#fff6f6,#fef2f2);
+    border:1px solid #fecaca; border-radius:14px; padding:13px 15px; text-align:start;
+    transition: transform .18s ease, box-shadow .18s ease;
+  }
+  .med-emg-public .lang-card:hover{ transform:translateY(-1px); box-shadow:0 8px 20px rgba(127,29,29,.08); }
+  .med-emg-public .lang-card .lang-tag { display:inline-block; font-size:10px; font-weight:800; color:#fff; background:linear-gradient(135deg,#dc2626,#7f1d1d); padding:3px 11px; border-radius:999px; letter-spacing:.9px; margin-bottom:7px; box-shadow:0 4px 10px rgba(127,29,29,.25); }
+  .med-emg-public .lang-card p { color:#334155; font-size:14px; line-height:1.75; margin:0; }
+
   .med-emg-public .iqama-field { display:flex; align-items:center; background:#f8fafc; border:1.5px solid #e2e8f0; border-radius:14px; padding:2px 6px 2px 14px; transition:all .2s; }
-  .med-emg-public .iqama-field:focus-within { border-color:#dc2626; background:#fff; box-shadow:0 0 0 4px rgba(220,38,38,.08); }
+  .med-emg-public .iqama-field:focus-within { border-color:#dc2626; background:#fff; box-shadow:0 0 0 5px rgba(220,38,38,.10); }
   .med-emg-public .iqama-field i.icn { color:#94a3b8; font-size:15px; margin-inline-end:8px; }
-  .med-emg-public .iqama-field input { flex:1; border:none; background:transparent; outline:none; padding:12px 4px; font-size:15px; font-weight:600; color:#0f172a; letter-spacing:.5px; font-family:inherit; direction:ltr; text-align:start; min-width:0; }
+  .med-emg-public .iqama-field input { flex:1; border:none; background:transparent; outline:none; padding:13px 4px; font-size:15px; font-weight:600; color:#0f172a; letter-spacing:.5px; font-family:inherit; direction:ltr; text-align:start; min-width:0; }
   .med-emg-public .iqama-field input::placeholder { color:#94a3b8; font-weight:500; letter-spacing:0; }
-  .med-emg-public .iqama-hint { font-size:11.5px; color:#64748b; margin-top:8px; line-height:1.6; display:flex; align-items:flex-start; gap:6px; }
+  .med-emg-public .iqama-hint { font-size:12px; color:#64748b; margin-top:10px; line-height:1.65; display:flex; align-items:flex-start; gap:7px; }
   .med-emg-public .iqama-hint i { color:#3282b8; margin-top:2px; }
   .med-emg-public .reporter-result { margin-top:12px; padding:12px 14px; border-radius:14px; font-size:13.5px; line-height:1.6; display:none; animation:medEmgFade .3s ease; }
   .med-emg-public .reporter-result.found { display:block; background:linear-gradient(135deg,#ecfdf5,#d1fae5); border:1px solid #a7f3d0; color:#065f46; }
@@ -20437,20 +20664,67 @@ window.toggleInjuryPrintPreview = function(){
   .med-emg-public .reporter-result .r-name { font-weight:800; font-size:15px; color:#064e3b; margin-bottom:4px; display:flex; align-items:center; gap:6px; }
   .med-emg-public .reporter-result .r-meta { display:grid; grid-template-columns:auto 1fr; gap:4px 10px; font-size:12.5px; margin-top:6px; }
   .med-emg-public .reporter-result .r-meta b { color:#047857; font-weight:700; }
-  @keyframes medEmgFade { from{opacity:0; transform:translateY(-4px);} to{opacity:1; transform:none;} }
 
-  /* Professional report button */
-  .med-emg-public .cta-wrap { width:100%; max-width:460px; position:relative; margin-top:6px; }
-  .med-emg-public .cta-wrap::before { content:""; position:absolute; inset:-6px; border-radius:26px; background:linear-gradient(135deg,#dc2626,#7f1d1d); filter:blur(18px); opacity:.45; z-index:0; animation:medEmgGlow 2.4s ease-in-out infinite; pointer-events:none; }
-  @keyframes medEmgGlow { 0%,100%{opacity:.4;} 50%{opacity:.7;} }
-  .med-emg-public .big-btn { position:relative; z-index:1; display:flex; align-items:center; justify-content:center; gap:14px; width:100%; padding:22px 20px; font-size:18px; font-weight:800; background:linear-gradient(135deg,#ef4444 0%,#dc2626 55%,#7f1d1d 100%); color:#fff; border:none; border-radius:22px; box-shadow:0 18px 42px rgba(220,38,38,.45), inset 0 1px 0 rgba(255,255,255,.25), inset 0 -3px 12px rgba(0,0,0,.15); cursor:pointer; transition:all .2s cubic-bezier(.4,0,.2,1); line-height:1.35; font-family:inherit; letter-spacing:.2px; }
-  .med-emg-public .big-btn:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 24px 55px rgba(220,38,38,.55), inset 0 1px 0 rgba(255,255,255,.3); }
+  /* ===== SOS Help Button ===== */
+  .med-emg-public .cta-wrap { width:100%; max-width:480px; position:relative; margin-top:14px; padding:6px; }
+  .med-emg-public .cta-wrap::before {
+    content:""; position:absolute; inset:-4px; border-radius:32px;
+    background:conic-gradient(from 0deg, #ef4444, #dc2626, #7f1d1d, #dc2626, #ef4444);
+    filter:blur(22px); opacity:.55; z-index:0; animation:medEmgGlow 2.6s ease-in-out infinite; pointer-events:none;
+  }
+  .med-emg-public .cta-wrap::after {
+    content:""; position:absolute; inset:0; border-radius:28px; z-index:0; pointer-events:none;
+    box-shadow: 0 0 0 0 rgba(220,38,38,.55);
+    animation: medEmgPulseRing 1.8s ease-out infinite;
+  }
+  @keyframes medEmgPulseRing {
+    0% { box-shadow: 0 0 0 0 rgba(220,38,38,.55); }
+    70% { box-shadow: 0 0 0 26px rgba(220,38,38,0); }
+    100% { box-shadow: 0 0 0 0 rgba(220,38,38,0); }
+  }
+
+  .med-emg-public .big-btn {
+    position:relative; z-index:1; display:flex; align-items:center; justify-content:center; gap:16px;
+    width:100%; padding:24px 22px; font-size:19px; font-weight:900;
+    background:
+      radial-gradient(120% 100% at 50% 0%, rgba(255,255,255,.22), transparent 55%),
+      linear-gradient(135deg,#ef4444 0%,#dc2626 55%,#7f1d1d 100%);
+    color:#fff; border:2px solid rgba(255,255,255,.35); border-radius:26px;
+    box-shadow:
+      0 22px 50px rgba(220,38,38,.5),
+      inset 0 2px 0 rgba(255,255,255,.35),
+      inset 0 -4px 14px rgba(0,0,0,.18);
+    cursor:pointer; transition:transform .18s cubic-bezier(.4,0,.2,1), box-shadow .18s ease, filter .18s ease;
+    line-height:1.35; font-family:inherit; letter-spacing:.2px; overflow:hidden;
+  }
+  .med-emg-public .big-btn::before{
+    content:""; position:absolute; top:0; left:-60%; width:50%; height:100%;
+    background:linear-gradient(120deg, transparent, rgba(255,255,255,.35), transparent);
+    transform:skewX(-20deg); animation: medEmgShine 3.4s ease-in-out infinite;
+  }
+  @keyframes medEmgShine { 0%,55%{ left:-60%; } 100%{ left:130%; } }
+  .med-emg-public .big-btn:hover:not(:disabled) { transform:translateY(-3px) scale(1.01); box-shadow:0 28px 62px rgba(220,38,38,.6), inset 0 2px 0 rgba(255,255,255,.4); filter:brightness(1.05); }
   .med-emg-public .big-btn:active:not(:disabled) { transform:scale(.98) translateY(0); }
   .med-emg-public .big-btn:disabled { opacity:.75; cursor:progress; }
-  .med-emg-public .big-btn .btn-icon { width:44px; height:44px; border-radius:50%; background:rgba(255,255,255,.2); display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; }
-  .med-emg-public .big-btn .btn-txt { flex:1; text-align:center; }
-  .med-emg-public .footer-note { margin-top:24px; color:#64748b; font-size:12px; max-width:460px; line-height:1.8; padding:12px 16px; background:rgba(255,255,255,.6); border-radius:14px; backdrop-filter:blur(8px); }
+  .med-emg-public .big-btn .btn-icon {
+    width:54px; height:54px; border-radius:50%;
+    background:radial-gradient(circle at 30% 25%, rgba(255,255,255,.55), rgba(255,255,255,.18));
+    display:flex; align-items:center; justify-content:center; font-size:26px; flex-shrink:0;
+    box-shadow: inset 0 -3px 8px rgba(0,0,0,.15), 0 4px 10px rgba(0,0,0,.15);
+    animation: medEmgIconPulse 1.4s ease-in-out infinite;
+  }
+  @keyframes medEmgIconPulse { 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.08); } }
+  .med-emg-public .big-btn .btn-txt { flex:1; text-align:center; text-shadow:0 2px 4px rgba(0,0,0,.2); }
+
+  .med-emg-public .footer-note { margin-top:26px; color:#64748b; font-size:12px; max-width:480px; line-height:1.85; padding:14px 18px; background:rgba(255,255,255,.7); border-radius:16px; backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,.9); box-shadow:0 6px 18px rgba(127,29,29,.06); }
   .med-emg-public .footer-note i { color:#dc2626; margin-inline-end:4px; }
+
+  @media (max-width:420px){
+    .med-emg-public .title-stack h1 { font-size:22px; }
+    .med-emg-public .icon-wrap { width:96px; height:96px; font-size:46px; }
+    .med-emg-public .big-btn { padding:20px 16px; font-size:17px; }
+    .med-emg-public .big-btn .btn-icon { width:46px; height:46px; font-size:22px; }
+  }
 
   /* History table */
   .med-emg-history { width:100%; border-collapse:collapse; margin-top:14px; font-size:13px; }
@@ -20479,9 +20753,6 @@ window.toggleInjuryPrintPreview = function(){
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:14px;">
       <button class="med-emg-btn secondary" onclick="medEmgDownloadQR()"><i class="fas fa-download"></i> Download PNG</button>
       <button class="med-emg-btn secondary" onclick="medEmgPrintQR()"><i class="fas fa-print"></i> Print Sticker</button>
-    </div>
-    <div style="margin-top:10px;">
-      <button class="med-emg-btn primary" style="width:100%;background:linear-gradient(135deg,#0f4c75,#3282b8);" onclick="openAlertsHistory()"><i class="fas fa-clipboard-list"></i> Emergency Alerts History — سجل بلاغات الطوارئ الطبية</button>
     </div>
     <div id="medEmgConfigWarn" style="display:none; margin-top:14px; padding:10px 12px; background:#fef3c7; border-left:4px solid #f59e0b; border-radius:8px; font-size:13px; color:#78350f;">
       ⚠️ Firebase is not configured. Alerts won't send until you paste your Firebase config inside this file (search for <code>FIREBASE_CONFIG_PLACEHOLDER</code>).
@@ -20570,15 +20841,129 @@ window.toggleInjuryPrintPreview = function(){
 
   // ================== ROUTE: PUBLIC PAGE TAKEOVER ==================
   const params = new URLSearchParams(location.search);
-  if (params.get('page') === 'medical-emergency'){
+  const __hashParams = new URLSearchParams((location.hash||'').replace(/^#/,''));
+  const __isMedEmgRoute = (
+    params.get('page') === 'medical-emergency' ||
+    __hashParams.get('page') === 'medical-emergency' ||
+    /emergency/i.test(location.pathname) ||
+    /emergency/i.test(location.hash)
+  );
+  if (__isMedEmgRoute){
     document.addEventListener('DOMContentLoaded', renderPublicEmergencyPage);
     if (document.readyState !== 'loading') renderPublicEmergencyPage();
   }
 
+  // ================== ROUTE: PUBLIC PAGE — LIVE MEDICAL TRACKING (standalone) ==================
+  if (params.get('page') === 'medical-tracking'){
+    document.addEventListener('DOMContentLoaded', renderPublicTrackingPage);
+    if (document.readyState !== 'loading') renderPublicTrackingPage();
+  }
+
+  function renderPublicTrackingPage(){
+    document.title = 'تتبع الاستجابة الطبية / Live Medical Tracking';
+    // Hard reset body to a dedicated tracking shell (mobile-first, full viewport)
+    document.body.className = 'ert-standalone-page';
+    document.body.style.margin = '0';
+    document.body.style.padding = '0';
+    document.body.style.background = '#0b1220';
+    document.body.style.minHeight = '100vh';
+    document.body.style.overflow = 'hidden';
+    // Ensure viewport meta for mobile
+    let vp = document.querySelector('meta[name=viewport]');
+    if (!vp){ vp = document.createElement('meta'); vp.name = 'viewport'; document.head.appendChild(vp); }
+    vp.setAttribute('content','width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover');
+
+    // Wait until ERT + overlay element are ready (defined later in the doc)
+    const openWhenReady = () => {
+      const overlay = document.getElementById('ertOverlay');
+      if (!window.ERT || !overlay) return false;
+      // Move overlay to be the sole child of body
+      Array.from(document.body.children).forEach(el => {
+        if (el.id !== 'ertOverlay' && el.tagName !== 'SCRIPT' && el.tagName !== 'STYLE' && el.tagName !== 'LINK') {
+          try { el.remove(); } catch(_){}
+        }
+      });
+      document.body.appendChild(overlay);
+      // Force full-page presentation (no underlying content to hide)
+      document.documentElement.classList.add('ert-open');
+      document.body.classList.add('ert-open');
+      // Hide "Close" button since this IS the tracking page — provide back-to-home instead
+      try {
+        const closeBtn = overlay.querySelector('.ert-close');
+        if (closeBtn){
+          closeBtn.innerHTML = '<i class="fas fa-arrow-left"></i> رجوع';
+          closeBtn.onclick = () => { window.location.href = window.location.pathname; };
+        }
+      } catch(_){}
+      const alertNumber = params.get('alert') || '';
+      const alertId = params.get('alertId') || alertNumber;
+      ERT.triggerAsWorker({
+        alertId: alertId,
+        alertNumber: alertNumber,
+        name: params.get('name') || 'Worker',
+        iqama: params.get('iqama') || '',
+        phone: params.get('phone') || '',
+        company: params.get('company') || '',
+        project: params.get('project') || ''
+      }, null, alertId);
+      // Extra map-size kicks — crucial on mobile where layout settles late
+      const kick = () => { try { if (window.L && ERT && ERT.__map) ERT.__map.invalidateSize(true); } catch(_){}
+        try { const ov = document.getElementById('ertMap'); if (ov && ov._leaflet_map) ov._leaflet_map.invalidateSize(true); } catch(_){} };
+      [100,400,900,1600,2500,4000].forEach(t => setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+      }, t));
+      return true;
+    };
+    let tries = 0;
+    const wait = setInterval(() => {
+      tries++;
+      if (openWhenReady() || tries > 120) clearInterval(wait);
+    }, 80);
+  }
+
+
   function renderPublicEmergencyPage(){
+    // Ensure the emergency styles ALWAYS apply, even if a parent stylesheet was overridden
+    if (!document.getElementById('medEmgForceStyles')){
+      const st = document.createElement('style');
+      st.id = 'medEmgForceStyles';
+      st.textContent = `
+        body.med-emg-public-page{margin:0!important;padding:0!important;background:linear-gradient(180deg,#fff5f5 0%,#ffe4e4 55%,#fecaca 100%)!important;min-height:100vh!important;font-family:'Inter',system-ui,-apple-system,'Segoe UI',Tahoma,sans-serif!important;color:#1e293b!important;}
+        body.med-emg-public-page *{box-sizing:border-box;}
+        .med-emg-public{max-width:520px;margin:0 auto;padding:22px 16px 60px;display:flex;flex-direction:column;align-items:center;text-align:center;}
+        .med-emg-public .brand-bar{display:inline-flex;align-items:center;gap:8px;background:#fff;color:#7f1d1d;font-weight:800;font-size:12px;letter-spacing:.8px;padding:8px 16px;border-radius:999px;box-shadow:0 6px 18px rgba(127,29,29,.12);margin-bottom:18px;}
+        .med-emg-public .brand-bar .dot{width:9px;height:9px;border-radius:50%;background:#dc2626;box-shadow:0 0 0 4px rgba(220,38,38,.18);}
+        .med-emg-public .icon-wrap{width:110px;height:110px;border-radius:50%;background:radial-gradient(circle at 30% 30%,#ef4444,#991b1b);display:grid;place-items:center;color:#fff;font-size:48px;box-shadow:0 18px 40px rgba(153,27,27,.35),inset 0 3px 0 rgba(255,255,255,.25);margin-bottom:18px;}
+        .med-emg-public .title-stack{display:flex;flex-direction:column;gap:6px;margin-bottom:22px;max-width:520px;}
+        .med-emg-public .title-stack h1{color:#7f1d1d;font-size:26px;font-weight:900;margin:0;line-height:1.25;}
+        .med-emg-public .title-stack h2{color:#991b1b;font-size:15px;font-weight:700;margin:0;}
+        .med-emg-public .panel{width:100%;max-width:480px;background:#fff;border-radius:20px;padding:18px 16px;box-shadow:0 10px 30px rgba(127,29,29,.08);margin-bottom:16px;text-align:start;}
+        .med-emg-public .panel-title{display:flex;align-items:center;gap:9px;font-size:12px;font-weight:800;color:#7f1d1d;margin-bottom:14px;text-transform:uppercase;letter-spacing:.7px;}
+        .med-emg-public .panel-title i{color:#dc2626;font-size:14px;}
+        .med-emg-public .panel-title .opt-tag{margin-inline-start:auto;font-size:10px;font-weight:700;color:#64748b;background:#f1f5f9;padding:3px 9px;border-radius:999px;text-transform:none;}
+        .med-emg-public .lang-cards{display:flex;flex-direction:column;gap:10px;}
+        .med-emg-public .lang-card{background:#fff5f5;border:1px solid #fecaca;border-radius:14px;padding:12px 14px;position:relative;}
+        .med-emg-public .lang-card .lang-tag{display:inline-block;font-size:10px;font-weight:800;color:#fff;background:linear-gradient(135deg,#dc2626,#7f1d1d);padding:3px 11px;border-radius:999px;letter-spacing:.9px;margin-bottom:7px;}
+        .med-emg-public .lang-card p{color:#334155;font-size:14px;line-height:1.75;margin:0;}
+        .med-emg-public .iqama-field{display:flex;align-items:center;background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:14px;padding:2px 12px;}
+        .med-emg-public .iqama-field i.icn{color:#94a3b8;font-size:15px;margin-inline-end:8px;}
+        .med-emg-public .iqama-field input{flex:1;border:none;background:transparent;outline:none;padding:13px 4px;font-size:15px;font-weight:600;color:#0f172a;font-family:inherit;direction:ltr;text-align:start;min-width:0;width:100%;}
+        .med-emg-public .iqama-hint{font-size:12px;color:#64748b;margin-top:10px;line-height:1.65;display:flex;align-items:flex-start;gap:7px;}
+        .med-emg-public .iqama-hint i{color:#3282b8;margin-top:2px;}
+        .med-emg-public .cta-wrap{width:100%;max-width:480px;margin-top:14px;padding:6px;}
+        .med-emg-public .big-btn{width:100%;min-height:96px;display:flex;align-items:center;justify-content:center;gap:14px;background:linear-gradient(135deg,#ef4444 0%,#dc2626 50%,#991b1b 100%);color:#fff;border:none;border-radius:22px;font-family:inherit;font-size:20px;font-weight:900;cursor:pointer;box-shadow:0 20px 45px rgba(220,38,38,.45),inset 0 2px 0 rgba(255,255,255,.3);padding:14px 20px;line-height:1.35;}
+        .med-emg-public .big-btn .btn-icon{width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.18);display:grid;place-items:center;font-size:28px;flex:0 0 56px;}
+        .med-emg-public .footer-note{margin-top:18px;width:100%;max-width:480px;background:#fff5f5;border:1px solid #fecaca;border-radius:14px;padding:12px 14px;color:#7f1d1d;font-size:12.5px;line-height:1.7;}
+        .med-emg-public .footer-note i{color:#dc2626;margin-inline-end:6px;}
+      `;
+      document.head.appendChild(st);
+    }
     const workerRef = params.get('worker') || '';
     document.title = 'طلب مساعدة طبية عاجلة / Medical Emergency / طبی ایمرجنسی';
     document.body.className = 'med-emg-public-page';
+    // Live Emergency Response tracker panel is removed from the report page
+    const __oldErt = document.getElementById('ertOverlay');
+    if (__oldErt && __oldErt.parentNode) __oldErt.parentNode.removeChild(__oldErt);
     document.body.innerHTML = `
       <div class="med-emg-public">
         <div class="brand-bar"><span class="dot"></span> MEDICAL EMERGENCY · طوارئ طبية</div>
@@ -20644,6 +21029,13 @@ window.toggleInjuryPrintPreview = function(){
       <div id="medEmgSendingModal" class="modal-overlay"></div>
     `;
     injectPublicModals();
+    // Tracker overlay intentionally NOT re-attached on the report page (removed per request).
+    // Keep it stripped even if another script re-inserts it later.
+    const __ertKill = setInterval(() => {
+      const el = document.getElementById('ertOverlay');
+      if (el && el.parentNode) { try { el.parentNode.removeChild(el); } catch(_){} }
+    }, 300);
+    setTimeout(() => clearInterval(__ertKill), 10000);
 
     // Reporter lookup on Iqama input
     const iqamaInput = document.getElementById('medEmgIqamaInput');
@@ -20725,7 +21117,8 @@ window.toggleInjuryPrintPreview = function(){
       <div class="med-emg-card" style="text-align:center;">
         <div style="font-size:60px; color:#10b981;"><i class="fas fa-check-circle"></i></div>
         <h2 style="color:#065f46; justify-content:center;">تم الإرسال بنجاح / Sent Successfully / کامیابی سے بھیج دیا</h2>
-        <p dir="rtl" style="color:#334155; line-height:1.8; margin:10px 0;">تم إرسال طلب المساعدة الطبية بنجاح.<br/>يرجى البقاء في مكانك حتى وصول فريق الإسعاف.</p>
+        <p dir="rtl" style="color:#065f46; line-height:1.8; margin:10px 0; font-weight:700; font-size:16px;">✓ تم إرسال البلاغ بنجاح إلى العيادة الطبية.</p>
+        <p dir="rtl" style="color:#334155; line-height:1.8; margin:10px 0;">يرجى البقاء في مكانك حتى وصول فريق الإسعاف.<br/>سيتم فتح شاشة التتبع المباشر تلقائيًا خلال ثوانٍ...</p>
         <p dir="ltr" style="color:#334155; line-height:1.7; margin:10px 0;">Your medical help request was sent.<br/>Please stay where you are until the medical team arrives.</p>
         <p dir="rtl" style="color:#334155; line-height:1.8; margin:10px 0; font-family:'Noto Nastaliq Urdu',serif;">آپ کی طبی مدد کی درخواست بھیج دی گئی ہے۔<br/>براہ کرم میڈیکل ٹیم کے پہنچنے تک اپنی جگہ پر رہیں۔</p>
         <div id="medEmgSuccessNumber" style="font-weight:700; color:#7f1d1d; margin:10px 0;"></div>
@@ -20766,11 +21159,20 @@ window.toggleInjuryPrintPreview = function(){
     const sending = document.getElementById('medEmgSendingModal');
     if (sending){
       sending.innerHTML = `
-        <div class="med-emg-card" style="text-align:center; max-width:420px;">
-          <div style="width:80px;height:80px;margin:0 auto 16px;border-radius:50%;border:6px solid #fee2e2;border-top-color:#dc2626;animation:medEmgSpin 1s linear infinite;"></div>
-          <h2 style="justify-content:center;color:#7f1d1d;">جاري إرسال بلاغ الطوارئ...</h2>
-          <p dir="ltr" style="color:#64748b;">Sending emergency alert to the medical clinic...</p>
+        <div class="med-emg-card" style="text-align:center; max-width:440px;">
+          <div style="width:96px;height:96px;margin:0 auto 18px;border-radius:50%;border:7px solid #fee2e2;border-top-color:#dc2626;animation:medEmgSpin 1s linear infinite;"></div>
+          <h2 style="justify-content:center;color:#7f1d1d;font-size:22px;">جاري إرسال بلاغ الطوارئ...</h2>
+          <p dir="rtl" style="color:#334155;line-height:1.7;margin:6px 0;">يتم الآن إرسال موقعك وبياناتك إلى فريق العيادة الطبية.<br/>يرجى الانتظار...</p>
+          <p dir="ltr" style="color:#64748b;font-size:13px;">Sending emergency alert to the medical clinic...</p>
+          <div style="margin-top:14px;height:6px;background:#fee2e2;border-radius:999px;overflow:hidden;">
+            <div style="height:100%;width:40%;background:linear-gradient(90deg,#dc2626,#ef4444);border-radius:999px;animation:medEmgSlide 1.4s ease-in-out infinite;"></div>
+          </div>
         </div>`;
+      if (!document.getElementById('medEmgSlideStyle')){
+        const st2 = document.createElement('style'); st2.id='medEmgSlideStyle';
+        st2.textContent = '@keyframes medEmgSlide{0%{margin-left:-40%}100%{margin-left:100%}}';
+        document.head.appendChild(st2);
+      }
       if (!document.getElementById('medEmgSpinStyle')){
         const st = document.createElement('style'); st.id='medEmgSpinStyle';
         st.textContent = '@keyframes medEmgSpin{to{transform:rotate(360deg)}}';
@@ -21015,23 +21417,23 @@ window.toggleInjuryPrintPreview = function(){
       window.__medEmgSendSource = null;
       pendingPayload = null;
 
-      // ==== Auto-open Live Response Tracker for the worker ====
+      // ==== Navigate to standalone Live Response Tracking PAGE (separated from report page) ====
       try {
         const alertKey = id || alertNumber;
-        if (window.ERT && typeof ERT.triggerAsWorker === 'function'){
-          setTimeout(() => {
-            try { document.getElementById('medEmgSuccessModal').classList.remove('show'); } catch(_){}
-            ERT.triggerAsWorker({
-              alertId: alertKey,
-              alertNumber: alertNumber,
-              name: record.reporterName || 'Worker',
-              iqama: record.reporterIqama || '',
-              phone: record.reporterPhone || '',
-              company: record.reporterCompany || '',
-              project: record.reporterProject || ''
-            }, null, alertKey);
-          }, 1500);
-        }
+        setTimeout(() => {
+          try { document.getElementById('medEmgSuccessModal').classList.remove('show'); } catch(_){}
+          const q = new URLSearchParams({
+            page: 'medical-tracking',
+            alert: String(alertNumber || ''),
+            alertId: String(alertKey || ''),
+            name: record.reporterName || 'Worker',
+            iqama: record.reporterIqama || '',
+            phone: record.reporterPhone || '',
+            company: record.reporterCompany || '',
+            project: record.reporterProject || ''
+          });
+          window.location.href = window.location.pathname + '?' + q.toString();
+        }, 1600);
         // Listen for nurse acknowledgment on the alert record
         if (db && id){
           const alertRef = db.ref('emergency_alerts/' + id);
@@ -21464,6 +21866,29 @@ window.toggleInjuryPrintPreview = function(){
   .ert-nurse-marker.moving{animation:ertBounce .8s infinite alternate}
   @keyframes ertBounce{from{transform:translateY(0)}to{transform:translateY(-4px)}}
   .ert-role-badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:.68rem;font-weight:800;letter-spacing:1px;background:rgba(255,255,255,.15);text-transform:uppercase}
+
+  /* --- Standalone Live Medical Tracking page (mobile-first, professional) --- */
+  body.ert-standalone-page { margin:0; padding:0; background:#0b1220; overflow:hidden; }
+  body.ert-standalone-page #ertOverlay { display:flex !important; position:fixed; inset:0; width:100vw; height:100vh; height:100dvh; }
+  body.ert-standalone-page .ert-header { padding-top: calc(12px + env(safe-area-inset-top)); padding-left: calc(18px + env(safe-area-inset-left)); padding-right: calc(18px + env(safe-area-inset-right)); }
+  body.ert-standalone-page .ert-body { height: 100%; }
+  body.ert-standalone-page #ertMap { min-height: 60vh; }
+  @media (max-width: 820px){
+    body.ert-standalone-page .ert-body { flex-direction: column; }
+    body.ert-standalone-page #ertMap { height: 58vh; min-height: 58vh; flex: none; }
+    body.ert-standalone-page .ert-side { width:100%; max-width:none; max-height: 42vh; overflow-y:auto; padding-bottom: calc(16px + env(safe-area-inset-bottom)); border-left:0; border-top:1px solid rgba(255,255,255,.08); }
+  }
+
+  /* --- FIX: isolate ERT tracker overlay from any underlying report page --- */
+  html.ert-open, body.ert-open { overflow: hidden !important; }
+  body.ert-open > *:not(#ertOverlay):not(script):not(style):not(link):not(noscript) {
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+  #ertOverlay { z-index: 2147483000 !important; }
+  #ertMap { min-height: 320px !important; width: 100% !important; }
+  @media (max-width: 820px){ #ertMap { min-height: 55vh !important; } }
+
   @media (max-width:820px){
     .ert-body{flex-direction:column}
     #ertMap{height:55vh;flex:none}
@@ -21476,7 +21901,7 @@ window.toggleInjuryPrintPreview = function(){
     <div class="ert-pulse"></div>
     <div>
       <div class="ert-title"><i class="fas fa-truck-medical"></i> Live Emergency Response <span id="ertRoleBadge" class="ert-role-badge">Worker</span></div>
-      <div class="ert-sub" id="ertHeaderSub">Establishing connection…</div>
+      <div class="ert-sub" id="ertHeaderSub" style="display:none;"></div>
     </div>
     <button class="ert-close" onclick="ERT.close()"><i class="fas fa-times"></i> Close</button>
   </div>
@@ -21588,8 +22013,9 @@ window.toggleInjuryPrintPreview = function(){
   function initMap(){
     if (state.map) return;
     state.map = L.map('ertMap',{zoomControl:true, attributionControl:false}).setView([24.7136,46.6753], 15);
+    try { window.ERT && (window.ERT.__map = state.map); document.getElementById('ertMap')._leaflet_map = state.map; } catch(_){}
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(state.map);
-    setTimeout(()=>state.map.invalidateSize(), 200);
+    [80, 250, 600, 1200, 2000].forEach(function(t){ setTimeout(function(){ try{ if(state.map) state.map.invalidateSize(true); }catch(_){} }, t); }); try { if(!state._resizeHooked){ state._resizeHooked = true; window.addEventListener('resize', function(){ try{ state.map && state.map.invalidateSize(true); }catch(_){} }); } } catch(_){}
   }
 
   function ensureMarkers(){
@@ -21788,7 +22214,13 @@ window.toggleInjuryPrintPreview = function(){
       const clinic = opts.clinic || getClinicLocation();
       if (clinic && clinic.lat) state.clinic = clinic;
 
-      document.getElementById('ertOverlay').classList.add('active');
+      try { const _ov = document.getElementById('ertOverlay'); if (_ov && _ov.parentNode !== document.body) document.body.appendChild(_ov); } catch(_){}
+      const __ertOv = document.getElementById('ertOverlay');
+      if (!__ertOv) { console.warn('[ERT] overlay not present on this page'); return; }
+      __ertOv.classList.add('active');
+      try{ document.documentElement.classList.add('ert-open'); document.body.classList.add('ert-open'); }catch(_){}
+      // Force map recompute once overlay is visible
+      setTimeout(function(){ try{ if(state.map) state.map.invalidateSize(true); if(typeof fitBounds==='function') fitBounds(); }catch(_){} }, 350);
       document.getElementById('ertRoleBadge').textContent = state.role==='nurse' ? 'Nurse / Admin' : 'Worker';
       document.getElementById('ertWorkerControls').style.display = state.role==='worker' ? '' : 'none';
       document.getElementById('ertNurseControls').style.display = state.role==='worker' ? 'none' : '';
@@ -21825,7 +22257,8 @@ window.toggleInjuryPrintPreview = function(){
       try { window.dispatchEvent(new CustomEvent('ert:opened',{detail:{id:state.emergencyId,role:state.role}})); } catch(_){}
     },
     close(){
-      document.getElementById('ertOverlay').classList.remove('active');
+      { const __ov = document.getElementById('ertOverlay'); if (__ov) __ov.classList.remove('active'); }
+      try{ document.documentElement.classList.remove('ert-open'); document.body.classList.remove('ert-open'); }catch(_){}
       cleanup();
     },
     cancel(){
@@ -21863,7 +22296,7 @@ window.toggleInjuryPrintPreview = function(){
 
   function finish(reason){
     state.active=false;
-    setTimeout(()=>{ document.getElementById('ertOverlay').classList.remove('active'); cleanup(); }, 1500);
+    setTimeout(function(){ const __ov = document.getElementById('ertOverlay'); if (__ov) __ov.classList.remove('active'); try{ document.documentElement.classList.remove('ert-open'); document.body.classList.remove('ert-open'); }catch(_){} cleanup(); }, 1500);
   }
   function cleanup(){
     if (state.workerWatchId!=null && navigator.geolocation){ try{navigator.geolocation.clearWatch(state.workerWatchId);}catch(_){} state.workerWatchId=null; }
