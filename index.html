@@ -3426,8 +3426,8 @@ label:has(input[type="checkbox"]:disabled:checked) {
             color:#991b1b;
             border:1px solid #991b1b;
             border-radius:4px;
-            padding:2px 6px;
-            font:bold 11px 'Inter',Arial,sans-serif;
+            padding:calc(2px * var(--lbl-s, 1)) calc(6px * var(--lbl-s, 1));
+            font:bold calc(11px * var(--lbl-s, 1)) 'Inter',Arial,sans-serif;
             line-height:1.1;
             white-space:nowrap;
             transform:translateY(-50%);
@@ -3436,6 +3436,21 @@ label:has(input[type="checkbox"]:disabled:checked) {
             box-shadow:0 1px 2px rgba(0,0,0,0.08);
             -webkit-print-color-adjust: exact; print-color-adjust: exact;
         }
+        /* Per-label resize handle (screen only). */
+        #injuryModal .mk-html-label .mk-resize-handle{
+            position:absolute;
+            right:-6px; bottom:-6px;
+            width:12px; height:12px;
+            background:#991b1b;
+            border:2px solid #ffffff;
+            border-radius:3px;
+            cursor: nwse-resize;
+            pointer-events: auto;
+            box-shadow:0 1px 2px rgba(0,0,0,0.25);
+            touch-action: none;
+        }
+        @media print { #injuryModal .mk-html-label .mk-resize-handle { display:none !important; } }
+
         /* Legacy classes kept for backward compatibility (no longer used). */
         #injuryModal .injury-marker-svg .mk-label-bg{
             fill:#ffffff; stroke:#991b1b; stroke-width:0.35;
@@ -17649,10 +17664,21 @@ window.toggleInjuryPrintPreview = function(){
       var lab = rootDoc.createElement('div');
       lab.className = 'mk-html-label';
       lab.textContent = name;
+      lab.setAttribute('data-part', name);
+      // Apply persisted per-label scale (from resize handle drag).
+      var lblScale = (typeof coords.labelScale === 'number') ? coords.labelScale : 1;
+      lblScale = Math.max(0.5, Math.min(3, lblScale));
+      coords.labelScale = lblScale;
+      lab.style.setProperty('--lbl-s', String(lblScale));
       lab.style.visibility = 'hidden';
       lab.style.left = '0px';
       lab.style.top  = '0px';
       g.ov.appendChild(lab);
+      // Resize handle (screen-only, hidden in PDF/print via CSS).
+      var rh = rootDoc.createElement('div');
+      rh.className = 'mk-resize-handle';
+      rh.setAttribute('data-part', name);
+      lab.appendChild(rh);
 
       var labW = 0, labH = 0;
       try {
@@ -17660,6 +17686,7 @@ window.toggleInjuryPrintPreview = function(){
         labW = lr0.width  || estimateLabelWidth(name);
         labH = lr0.height || 16;
       } catch(_){ labW = estimateLabelWidth(name); labH = 16; }
+
 
       // If the label is too wide to ever fit on one line inside the image,
       // allow wrapping and remeasure so it still stays inside the diagram.
@@ -17762,6 +17789,30 @@ window.toggleInjuryPrintPreview = function(){
       candRect.top    = topPx - halfH;
       candRect.bottom = topPx + halfH;
 
+      // Safety: never let the label rectangle cover the dot itself
+      // (this can happen after horizontal clamping near image edges).
+      var dotR = 8; // dot radius + a little breathing room
+      var dotHitsX = (px >= side.labelLeft - dotR) && (px <= side.labelRight + dotR);
+      var dotHitsY = (py >= candRect.top - dotR) && (py <= candRect.bottom + dotR);
+      if (dotHitsX && dotHitsY){
+        // Push label horizontally to whichever side has more room.
+        var roomLeft  = (px - dotR) - imgLeft;
+        var roomRight = imgRight - (px + dotR);
+        if (roomRight >= labW || roomRight >= roomLeft){
+          var newLeft = Math.min(imgRight - labW, px + dotR + 4);
+          var shiftX = newLeft - side.labelLeft;
+          side.labelLeft  += shiftX;
+          side.labelRight += shiftX;
+          side.right = true;
+        } else {
+          var newRight = Math.max(imgLeft + labW, px - dotR - 4);
+          var shiftX2 = newRight - side.labelRight;
+          side.labelLeft  += shiftX2;
+          side.labelRight += shiftX2;
+          side.right = false;
+        }
+      }
+
       // Apply final label position.
       lab.style.left = side.labelLeft + 'px';
       lab.style.right = '';
@@ -17769,6 +17820,7 @@ window.toggleInjuryPrintPreview = function(){
       lab.style.visibility = '';
 
       placedByView[v].push(candRect);
+
 
       // Leader endpoint = label edge nearest the dot, on the label's vertical center.
       var endX = side.right ? side.labelLeft : side.labelRight;
@@ -17789,7 +17841,61 @@ window.toggleInjuryPrintPreview = function(){
       grp.appendChild(anch);
       g.svg.appendChild(grp);
     });
+    // Wire per-overlay pointer handlers for label resize handles.
+    if (rootDoc === document) {
+      [of, ob].forEach(function(ov){
+        if (!ov || ov.__injuryLabelResizeWired) return;
+        ov.__injuryLabelResizeWired = true;
+        var active = null;
+        ov.addEventListener('pointerdown', function(e){
+          var h = e.target && e.target.closest && e.target.closest('.mk-resize-handle');
+          if (!h || !ov.contains(h)) return;
+          var part = h.getAttribute('data-part');
+          var mp = getMap();
+          var entry = mp && mp.get && mp.get(part);
+          if (!entry) return;
+          e.preventDefault();
+          e.stopPropagation();
+          try { h.setPointerCapture(e.pointerId); } catch(_){}
+          active = {
+            handle: h, part: part,
+            lab: h.parentNode,
+            startX: e.clientX, startY: e.clientY,
+            startScale: (typeof entry.labelScale === 'number') ? entry.labelScale : 1
+          };
+        });
+        ov.addEventListener('pointermove', function(e){
+          if (!active) return;
+          var mp = getMap();
+          var entry = mp && mp.get && mp.get(active.part);
+          if (!entry) return;
+          // Diagonal drag = average of X/Y delta. 80px ≈ +1.0 scale.
+          var d = ((e.clientX - active.startX) + (e.clientY - active.startY)) / 2;
+          var next = active.startScale + d / 80;
+          next = Math.max(0.5, Math.min(3, next));
+          entry.labelScale = next;
+          // Live-preview scale without re-rendering (keeps pointer capture alive).
+          if (active.lab) active.lab.style.setProperty('--lbl-s', String(next));
+        });
+        var end = function(e){
+          if (!active) return;
+          try { active.handle.releasePointerCapture(e.pointerId); } catch(_){}
+          active = null;
+          // Re-render once to reflow leader lines & avoid dot overlap.
+          renderInjuryDots(document);
+        };
+        ov.addEventListener('pointerup', end);
+        ov.addEventListener('pointercancel', end);
+        // Prevent the click after drag from placing a new dot.
+        ov.addEventListener('click', function(e){
+          var h = e.target && e.target.closest && e.target.closest('.mk-resize-handle');
+          if (h) { e.stopPropagation(); e.preventDefault(); }
+        }, true);
+
+      });
+    }
   }
+
 
 
   // Expose renderer for html2pdf onclone hook + every legacy caller.
