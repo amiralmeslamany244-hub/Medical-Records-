@@ -17464,6 +17464,19 @@ window.toggleInjuryPrintPreview = function(){
     }
     var geo = { front: fitSvgToImage('front'), back: fitSvgToImage('back') };
 
+    // Track placed label rectangles per view to avoid overlaps.
+    var placedByView = { front: [], back: [] };
+
+    // Helper: approximate text width in px for the label font (bold 11px Inter).
+    function estimateLabelWidth(text){
+      // Padding (6px * 2) + border (1px * 2) ~= 14px, plus ~6.4px per char.
+      return Math.ceil(text.length * 6.4) + 14;
+    }
+    function rectsOverlap(a, b){
+      return !(a.right <= b.left || a.left >= b.right ||
+               a.bottom <= b.top || a.top  >= b.bottom);
+    }
+
     map.forEach(function(coords, name){
       if (!coords || typeof coords.x !== 'number' || typeof coords.y !== 'number') return;
       var v = coords.view;
@@ -17487,16 +17500,142 @@ window.toggleInjuryPrintPreview = function(){
       dot.title = name;
       g.ov.appendChild(dot);
 
-      // Leader line + label, all in the SAME pixel space.
-      // Choose side: project label toward the nearer horizontal edge of the
-      // IMAGE (not the overlay), so the line stays close to the body.
-      var onRight = (coords.x >= 50);
-      // Leader length scales with image width but clamped for sanity.
-      var leaderLen = Math.max(36, Math.min(110, g.cr.width * 0.18));
-      var endX = onRight
-        ? Math.min(g.ox + g.cr.width  - 2, px + leaderLen)
-        : Math.max(g.ox + 2,               px - leaderLen);
-      var endY = py;
+      // === Smart label placement ===
+      // Bounds we MUST keep the label inside: the visible image content rect,
+      // expressed in overlay-pixel coordinates.
+      var imgLeft   = g.ox + 2;
+      var imgRight  = g.ox + g.cr.width  - 2;
+      var imgTop    = g.oy + 2;
+      var imgBottom = g.oy + g.cr.height - 2;
+
+      // Create the label first (hidden) so we can measure its real size.
+      var lab = rootDoc.createElement('div');
+      lab.className = 'mk-html-label';
+      lab.textContent = name;
+      lab.style.visibility = 'hidden';
+      lab.style.left = '0px';
+      lab.style.top  = '0px';
+      g.ov.appendChild(lab);
+
+      var labW = 0, labH = 0;
+      try {
+        var lr0 = lab.getBoundingClientRect();
+        labW = lr0.width  || estimateLabelWidth(name);
+        labH = lr0.height || 16;
+      } catch(_){ labW = estimateLabelWidth(name); labH = 16; }
+
+      // If the label is too wide to ever fit on one line inside the image,
+      // allow wrapping and remeasure so it still stays inside the diagram.
+      var maxLabelW = Math.max(40, g.cr.width - 24);
+      if (labW > maxLabelW){
+        lab.style.whiteSpace = 'normal';
+        lab.style.maxWidth   = maxLabelW + 'px';
+        lab.style.wordBreak  = 'break-word';
+        try {
+          var lr1 = lab.getBoundingClientRect();
+          labW = lr1.width  || labW;
+          labH = lr1.height || labH;
+        } catch(_){}
+      }
+
+      // Preferred side: outward from body center. Flip if it doesn't fit.
+      var preferRight = (coords.x >= 50);
+      var gapLead = 8;   // space between label edge and dot
+      var minLeader = 24;
+
+      function computeForSide(right){
+        // labelLeft/labelRight are the label's box edges in overlay px.
+        var labelLeft, labelRight, endX;
+        if (right){
+          // Label sits to the right of the dot.
+          endX = Math.min(imgRight - labW - gapLead,
+                          Math.max(px + minLeader, px + Math.min(110, g.cr.width * 0.18)));
+          endX = Math.max(endX, px + gapLead); // never behind the dot
+          labelLeft  = endX + 4;
+          labelRight = labelLeft + labW;
+        } else {
+          endX = Math.max(imgLeft + labW + gapLead,
+                          Math.min(px - minLeader, px - Math.min(110, g.cr.width * 0.18)));
+          endX = Math.min(endX, px - gapLead);
+          labelRight = endX - 4;
+          labelLeft  = labelRight - labW;
+        }
+        var fits = (labelLeft >= imgLeft) && (labelRight <= imgRight);
+        return { right: right, endX: endX, labelLeft: labelLeft, labelRight: labelRight, fits: fits };
+      }
+
+      var side = computeForSide(preferRight);
+      if (!side.fits){
+        var other = computeForSide(!preferRight);
+        if (other.fits) side = other;
+        // else: keep preferred; we'll clamp below.
+      }
+
+      // Clamp horizontally into image rect (last-resort safety).
+      if (side.labelLeft < imgLeft){
+        var shift = imgLeft - side.labelLeft;
+        side.labelLeft  += shift;
+        side.labelRight += shift;
+        side.endX       += shift;
+      } else if (side.labelRight > imgRight){
+        var shift2 = side.labelRight - imgRight;
+        side.labelLeft  -= shift2;
+        side.labelRight -= shift2;
+        side.endX       -= shift2;
+      }
+
+      // Vertical: try to center on the dot, then clamp inside the image, then
+      // nudge up/down to avoid overlapping previously placed labels.
+      var topPx = py;
+      var halfH = labH / 2;
+      if (topPx - halfH < imgTop)    topPx = imgTop + halfH;
+      if (topPx + halfH > imgBottom) topPx = imgBottom - halfH;
+
+      var candRect = {
+        left: side.labelLeft, right: side.labelRight,
+        top: topPx - halfH,   bottom: topPx + halfH
+      };
+      var placed = placedByView[v] || [];
+      var attempts = 0, step = labH + 4, dir = 1, dist = 0;
+      while (attempts < 40){
+        var clash = false;
+        for (var i = 0; i < placed.length; i++){
+          if (rectsOverlap(candRect, placed[i])){ clash = true; break; }
+        }
+        if (!clash) break;
+        // Alternate up/down, growing distance each pair.
+        dist += (dir === 1 ? step : 0);
+        var tryTop = topPx + (dir === 1 ? -dist : dist);
+        // Keep inside image bounds; if it would exit, try the other direction only.
+        if (tryTop - halfH < imgTop || tryTop + halfH > imgBottom){
+          dir = -dir;
+          attempts++;
+          continue;
+        }
+        candRect.top    = tryTop - halfH;
+        candRect.bottom = tryTop + halfH;
+        // Commit this attempt's y for the next overlap check iteration.
+        topPx = tryTop;
+        dir = -dir;
+        attempts++;
+      }
+      // Final clamp after nudging.
+      if (topPx - halfH < imgTop)    topPx = imgTop + halfH;
+      if (topPx + halfH > imgBottom) topPx = imgBottom - halfH;
+      candRect.top    = topPx - halfH;
+      candRect.bottom = topPx + halfH;
+
+      // Apply final label position.
+      lab.style.left = side.labelLeft + 'px';
+      lab.style.right = '';
+      lab.style.top  = topPx + 'px';
+      lab.style.visibility = '';
+
+      placedByView[v].push(candRect);
+
+      // Leader endpoint = label edge nearest the dot, on the label's vertical center.
+      var endX = side.right ? side.labelLeft : side.labelRight;
+      var endY = topPx;
 
       // SVG leader line + small filled circle at the start (anchor on body).
       var grp = rootDoc.createElementNS(NS, 'g');
@@ -17506,37 +17645,12 @@ window.toggleInjuryPrintPreview = function(){
       line.setAttribute('x1', px); line.setAttribute('y1', py);
       line.setAttribute('x2', endX); line.setAttribute('y2', endY);
       grp.appendChild(line);
-      // Tiny anchor dot where the leader meets the body (helps print clarity).
       var anch = rootDoc.createElementNS(NS, 'circle');
       anch.setAttribute('class', 'mk-lead-anchor');
       anch.setAttribute('cx', px); anch.setAttribute('cy', py);
       anch.setAttribute('r', 2);
       grp.appendChild(anch);
       g.svg.appendChild(grp);
-
-      // HTML label (pixel-perfect typography — no SVG aspect distortion).
-      var lab = rootDoc.createElement('div');
-      lab.className = 'mk-html-label';
-      lab.textContent = name;
-      // Anchor the label horizontally at the leader endpoint.
-      if (onRight) {
-        lab.style.left = (endX + 4) + 'px';
-      } else {
-        // For left side, anchor the RIGHT edge of the label to endX.
-        lab.style.right = (g.ovRect.width - endX + 4) + 'px';
-      }
-      lab.style.top = endY + 'px';
-      // Keep label inside overlay bounds vertically.
-      g.ov.appendChild(lab);
-      try {
-        var lr = lab.getBoundingClientRect();
-        var ovr = g.ovRect;
-        var topPx = endY;
-        var halfH = lr.height / 2;
-        if (topPx - halfH < 2) topPx = halfH + 2;
-        else if (topPx + halfH > ovr.height - 2) topPx = ovr.height - halfH - 2;
-        lab.style.top = topPx + 'px';
-      } catch(_){}
     });
   }
 
