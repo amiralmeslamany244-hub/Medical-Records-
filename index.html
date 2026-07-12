@@ -4,9 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script>
-      /* Disabled: previously forced desktop viewport (1400px) on mobile devices.
-         Removed so mobile keeps native width=device-width and report modals
-         render with the same fill-screen behavior as desktop. */
+      /* Force desktop layout on mobile devices only.
+         Desktop browsers are unaffected (they already have width >= 1400).
+         This makes phones/tablets render the site exactly like the desktop
+         browser view (zoomed-out desktop layout, horizontally scrollable
+         if needed), instead of a narrow mobile-adapted layout. */
+      (function () {
+        try {
+          var isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+          var isNarrow = window.screen && window.screen.width && window.screen.width < 1024;
+          if (isTouch || isNarrow) {
+            var vp = document.querySelector('meta[name="viewport"]');
+            if (!vp) {
+              vp = document.createElement('meta');
+              vp.setAttribute('name', 'viewport');
+              document.head.appendChild(vp);
+            }
+            vp.setAttribute('content', 'width=1400, initial-scale=0.1, minimum-scale=0.1, maximum-scale=3.0, user-scalable=yes');
+            document.documentElement.classList.add('force-desktop-mobile');
+          }
+        } catch (e) { /* no-op */ }
+      })();
     </script>
 
     <title>Construction Medical Records | Physical Examination & Site Clinic & Injury Reports</title>
