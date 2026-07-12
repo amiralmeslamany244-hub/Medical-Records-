@@ -4,18 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script>
-      /* Force desktop-layout only on real mobile devices; keep desktop browser as-is */
-      (function(){
-        try {
-          var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-                       || (('ontouchstart' in window) && Math.min(screen.width, screen.height) < 900);
-          if (isMobile) {
-            var vp = document.querySelector('meta[name=viewport]');
-            vp.setAttribute('content','width=1400, initial-scale=0.25, minimum-scale=0.1, maximum-scale=5.0, user-scalable=yes');
-            document.documentElement.classList.add('force-desktop-mobile');
-          }
-        } catch(e){}
-      })();
+      /* Disabled: previously forced desktop viewport (1400px) on mobile devices.
+         Removed so mobile keeps native width=device-width and report modals
+         render with the same fill-screen behavior as desktop. */
     </script>
 
     <title>Construction Medical Records | Physical Examination & Site Clinic & Injury Reports</title>
@@ -6018,64 +6009,45 @@ body.splash-active{overflow:hidden;}
     }
     </style>
 
+<style id="ymco-report-modal-uniform">
+/* ============================================================
+   Unify size + scroll behavior for the three report modals
+   across ALL viewports (mobile and desktop). Reference behavior
+   is the mobile one: modal fills the viewport, internal scroll
+   lives inside .modal-container, sticky header stays visible.
+   Scoped strictly to #clinicModal / #injuryModal / #physicalExamModal
+   so other modals (e.g. #imageViewerModal) are not affected.
+   ============================================================ */
+#clinicModal.modal-overlay,
+#injuryModal.modal-overlay,
+#physicalExamModal.modal-overlay {
+  padding: 0 !important;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+}
+#clinicModal .modal-container,
+#injuryModal .modal-container,
+#physicalExamModal .modal-container {
+  width: 100vw !important;
+  max-width: 100vw !important;
+  min-width: 0 !important;
+  height: 100vh !important;
+  min-height: 100vh !important;
+  max-height: 100vh !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  box-sizing: border-box !important;
+}
+</style>
+
 
 <style id="force-desktop-reports">
-/* ============================================================
-   Force desktop layout for report modals on ALL screen sizes.
-   Neutralizes every mobile @media rule that touches these three
-   reports: #clinicModal, #injuryModal, #physicalExamModal.
-   Viewport is set to width=1400 so the phone renders desktop and
-   scales down; user can pinch-zoom and scroll.
-   ============================================================ */
-/* Only active on real mobile devices (class added by inline script in <head>) */
-html.force-desktop-mobile, html.force-desktop-mobile body { min-width: 1400px !important; }
-
-html.force-desktop-mobile #clinicModal .modal-container,
-html.force-desktop-mobile #physicalExamModal .modal-container { width: 1200px !important; max-width: 1200px !important; }
-html.force-desktop-mobile #injuryModal .modal-container { width: 1300px !important; max-width: 1300px !important; }
-
-@media (max-width: 1399px) {
-  html.force-desktop-mobile #clinicModal,
-  html.force-desktop-mobile #injuryModal,
-  html.force-desktop-mobile #physicalExamModal,
-  html.force-desktop-mobile #clinicModal *,
-  html.force-desktop-mobile #injuryModal *,
-  html.force-desktop-mobile #physicalExamModal * {
-    grid-template-columns: revert !important;
-    flex-direction: revert !important;
-    flex-wrap: revert !important;
-    display: revert !important;
-    width: revert !important;
-    max-width: revert !important;
-    min-width: revert !important;
-    padding: revert !important;
-    margin: revert !important;
-    font-size: revert !important;
-    text-align: revert !important;
-    float: revert !important;
-    position: revert !important;
-    overflow: revert !important;
-    white-space: revert !important;
-  }
-  html.force-desktop-mobile #clinicModal.modal-overlay,
-  html.force-desktop-mobile #injuryModal.modal-overlay,
-  html.force-desktop-mobile #physicalExamModal.modal-overlay {
-    display: flex !important;
-    position: fixed !important;
-  }
-  html.force-desktop-mobile #clinicModal .modal-container,
-  html.force-desktop-mobile #injuryModal .modal-container,
-  html.force-desktop-mobile #physicalExamModal .modal-container {
-    display: flex !important;
-    flex-direction: column !important;
-  }
-  html.force-desktop-mobile #clinicModal .modal-body,
-  html.force-desktop-mobile #injuryModal .modal-body,
-  html.force-desktop-mobile #physicalExamModal .modal-body {
-    display: block !important;
-    overflow: auto !important;
-  }
-}
+/* Disabled: previously forced 1200/1300px desktop width for report modals
+   on mobile and reverted mobile @media rules. Removed so the three report
+   modals use the unified fill-screen behavior on every viewport. */
 </style>
 </head>
 <body>
