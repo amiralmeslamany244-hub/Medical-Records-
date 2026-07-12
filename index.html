@@ -2,7 +2,22 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=1400, initial-scale=0.25, minimum-scale=0.1, maximum-scale=5.0, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+      /* Force desktop-layout only on real mobile devices; keep desktop browser as-is */
+      (function(){
+        try {
+          var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+                       || (('ontouchstart' in window) && Math.min(screen.width, screen.height) < 900);
+          if (isMobile) {
+            var vp = document.querySelector('meta[name=viewport]');
+            vp.setAttribute('content','width=1400, initial-scale=0.25, minimum-scale=0.1, maximum-scale=5.0, user-scalable=yes');
+            document.documentElement.classList.add('force-desktop-mobile');
+          }
+        } catch(e){}
+      })();
+    </script>
+
     <title>Construction Medical Records | Physical Examination & Site Clinic & Injury Reports</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -6012,17 +6027,20 @@ body.splash-active{overflow:hidden;}
    Viewport is set to width=1400 so the phone renders desktop and
    scales down; user can pinch-zoom and scroll.
    ============================================================ */
-html, body { min-width: 1400px !important; }
+/* Only active on real mobile devices (class added by inline script in <head>) */
+html.force-desktop-mobile, html.force-desktop-mobile body { min-width: 1400px !important; }
 
-/* Keep report modal containers at their desktop widths */
-#clinicModal .modal-container,
-#physicalExamModal .modal-container { width: 1200px !important; max-width: 1200px !important; }
-#injuryModal .modal-container { width: 1300px !important; max-width: 1300px !important; }
+html.force-desktop-mobile #clinicModal .modal-container,
+html.force-desktop-mobile #physicalExamModal .modal-container { width: 1200px !important; max-width: 1200px !important; }
+html.force-desktop-mobile #injuryModal .modal-container { width: 1300px !important; max-width: 1300px !important; }
 
-/* Nullify any responsive collapse inside the three reports */
 @media (max-width: 1399px) {
-  #clinicModal, #injuryModal, #physicalExamModal,
-  #clinicModal *, #injuryModal *, #physicalExamModal * {
+  html.force-desktop-mobile #clinicModal,
+  html.force-desktop-mobile #injuryModal,
+  html.force-desktop-mobile #physicalExamModal,
+  html.force-desktop-mobile #clinicModal *,
+  html.force-desktop-mobile #injuryModal *,
+  html.force-desktop-mobile #physicalExamModal * {
     grid-template-columns: revert !important;
     flex-direction: revert !important;
     flex-wrap: revert !important;
@@ -6039,22 +6057,21 @@ html, body { min-width: 1400px !important; }
     overflow: revert !important;
     white-space: revert !important;
   }
-  /* Preserve intended overlay/modal positioning that `revert` would break */
-  #clinicModal.modal-overlay,
-  #injuryModal.modal-overlay,
-  #physicalExamModal.modal-overlay {
+  html.force-desktop-mobile #clinicModal.modal-overlay,
+  html.force-desktop-mobile #injuryModal.modal-overlay,
+  html.force-desktop-mobile #physicalExamModal.modal-overlay {
     display: flex !important;
     position: fixed !important;
   }
-  #clinicModal .modal-container,
-  #injuryModal .modal-container,
-  #physicalExamModal .modal-container {
+  html.force-desktop-mobile #clinicModal .modal-container,
+  html.force-desktop-mobile #injuryModal .modal-container,
+  html.force-desktop-mobile #physicalExamModal .modal-container {
     display: flex !important;
     flex-direction: column !important;
   }
-  #clinicModal .modal-body,
-  #injuryModal .modal-body,
-  #physicalExamModal .modal-body {
+  html.force-desktop-mobile #clinicModal .modal-body,
+  html.force-desktop-mobile #injuryModal .modal-body,
+  html.force-desktop-mobile #physicalExamModal .modal-body {
     display: block !important;
     overflow: auto !important;
   }
