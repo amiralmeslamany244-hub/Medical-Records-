@@ -4,28 +4,34 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script>
-      /* Force desktop layout on mobile devices only.
-         Desktop browsers are unaffected (they already have width >= 1400).
-         This makes phones/tablets render the site exactly like the desktop
-         browser view (zoomed-out desktop layout, horizontally scrollable
-         if needed), instead of a narrow mobile-adapted layout. */
+      /* Force desktop layout on mobile, scaled to fit screen width (no side gaps). */
       (function () {
         try {
+          var DESKTOP_WIDTH = 1400;
           var isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-          var isNarrow = window.screen && window.screen.width && window.screen.width < 1024;
+          var sw = (window.screen && window.screen.width) || window.innerWidth;
+          var isNarrow = sw && sw < 1024;
           if (isTouch || isNarrow) {
+            var scale = Math.min(1, sw / DESKTOP_WIDTH);
             var vp = document.querySelector('meta[name="viewport"]');
             if (!vp) {
               vp = document.createElement('meta');
               vp.setAttribute('name', 'viewport');
               document.head.appendChild(vp);
             }
-            vp.setAttribute('content', 'width=1400, initial-scale=0.1, minimum-scale=0.1, maximum-scale=3.0, user-scalable=yes');
+            vp.setAttribute('content',
+              'width=' + DESKTOP_WIDTH +
+              ', initial-scale=' + scale +
+              ', minimum-scale=' + scale +
+              ', maximum-scale=3.0, user-scalable=yes');
             document.documentElement.classList.add('force-desktop-mobile');
           }
         } catch (e) { /* no-op */ }
       })();
     </script>
+    <style>
+      html.force-desktop-mobile, html.force-desktop-mobile body { overflow-x: hidden; }
+    </style>
 
     <title>Construction Medical Records | Physical Examination & Site Clinic & Injury Reports</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
