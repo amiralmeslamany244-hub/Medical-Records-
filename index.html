@@ -3446,6 +3446,19 @@ label:has(input[type="checkbox"]:disabled:checked) {
             dominant-baseline:central;
             -webkit-print-color-adjust: exact; print-color-adjust: exact;
         }
+        #injuryModal .injury-marker-svg .mk-drag{
+            pointer-events: auto; cursor: grab;
+        }
+        #injuryModal .injury-marker-svg .mk-drag.dragging{
+            cursor: grabbing; user-select: none;
+        }
+        #injuryModal .injury-marker-svg .mk-resize{
+            fill:#991b1b; stroke:#ffffff; stroke-width:0.25;
+            cursor: nwse-resize; pointer-events: auto;
+            -webkit-print-color-adjust: exact; print-color-adjust: exact;
+        }
+        @media print { #injuryModal .injury-marker-svg .mk-resize { display:none; } }
+
         @media screen{
             #injuryModal .injury-marker-svg .mk-ring{
                 filter: drop-shadow(0 0 2.5px rgba(239,68,68,.85));
@@ -13215,20 +13228,37 @@ document.getElementById('imageViewerModal').addEventListener('click', (e) => {
                 // Right half (cx >= 50) -> label on the right; left half -> left.
                 const onRight = cx >= 50;
                 const labelText = name;
+                // Per-label scale (from resize handle). Clamped to a sane range.
+                const rawScale = (typeof coords.labelScale === 'number') ? coords.labelScale : 1;
+                const scale = Math.max(0.5, Math.min(3, rawScale));
+                coords.labelScale = scale;
                 // Approx label width: ~1.5 units per char + padding.
-                const charW = 1.45;
-                const padX = 1.2, padY = 1.0;
-                const txtW = Math.max(8, labelText.length * charW);
+                const charW = 1.45 * scale;
+                const padX = 1.2 * scale, padY = 1.0 * scale;
+                const txtW = Math.max(8 * scale, labelText.length * charW);
                 const boxW = txtW + padX * 2;
-                const boxH = 4.2;
-                // Endpoint of leader line on the body-edge side.
-                const endX = onRight ? Math.min(99, cx + 14) : Math.max(1, cx - 14);
-                const endY = cy;
-                // Label box x (anchored at end of leader, extending outward).
-                const boxX = onRight
+                const boxH = 4.2 * scale;
+                const fontSize = 2.6 * scale;
+                // Default endpoint of leader line on the body-edge side.
+                let endX = onRight ? Math.min(99, cx + 14) : Math.max(1, cx - 14);
+                let endY = cy;
+                // Default label box x (anchored at end of leader, extending outward).
+                let boxX = onRight
                     ? Math.min(100 - boxW, endX)
                     : Math.max(0, endX - boxW);
-                const boxY = endY - boxH / 2;
+                let boxY = endY - boxH / 2;
+                // Apply persisted per-label drag offset (viewBox %-units), then clamp
+                // so the label box stays fully inside the visible 0..100 viewBox.
+                const dx = (typeof coords.labelDx === 'number') ? coords.labelDx : 0;
+                const dy = (typeof coords.labelDy === 'number') ? coords.labelDy : 0;
+                boxX = Math.max(0, Math.min(100 - boxW, boxX + dx));
+                boxY = Math.max(0, Math.min(100 - boxH, boxY + dy));
+                // Leader endpoint = edge of label box nearest the dot.
+                endX = (cx >= boxX + boxW) ? (boxX + boxW)
+                     : (cx <= boxX)        ? boxX
+                     : cx;
+                endY = Math.max(boxY, Math.min(boxY + boxH, cy));
+                const labelOnRight = (cx < boxX + boxW / 2);
                 const line = rootDoc.createElementNS(NS, 'line');
                 line.setAttribute('class', 'mk-lead');
                 line.setAttribute('x1', cx); line.setAttribute('y1', cy);
@@ -13237,20 +13267,127 @@ document.getElementById('imageViewerModal').addEventListener('click', (e) => {
                 rect.setAttribute('class', 'mk-label-bg');
                 rect.setAttribute('x', boxX); rect.setAttribute('y', boxY);
                 rect.setAttribute('width', boxW); rect.setAttribute('height', boxH);
-                rect.setAttribute('rx', 0.8); rect.setAttribute('ry', 0.8);
+                rect.setAttribute('rx', 0.8 * scale); rect.setAttribute('ry', 0.8 * scale);
                 const lbl = rootDoc.createElementNS(NS, 'text');
                 lbl.setAttribute('class', 'mk-label');
-                lbl.setAttribute('x', onRight ? (boxX + padX) : (boxX + boxW - padX));
-                lbl.setAttribute('y', endY);
-                lbl.setAttribute('text-anchor', onRight ? 'start' : 'end');
+                lbl.setAttribute('x', labelOnRight ? (boxX + padX) : (boxX + boxW - padX));
+                lbl.setAttribute('y', boxY + boxH / 2);
+                lbl.setAttribute('text-anchor', labelOnRight ? 'start' : 'end');
+                lbl.setAttribute('font-size', fontSize);
                 lbl.textContent = labelText;
-                g.appendChild(line);
-                g.appendChild(rect);
-                g.appendChild(lbl);
+                // Inner group wraps the draggable pieces (line + box + text).
+                // The dot (mk-ring) is intentionally outside so dragging the
+                // label never moves the anchor on the body.
+                const drag = rootDoc.createElementNS(NS, 'g');
+                drag.setAttribute('class', 'mk-drag');
+                drag.setAttribute('data-part', name);
+                drag.appendChild(line);
+                drag.appendChild(rect);
+                drag.appendChild(lbl);
+                g.appendChild(drag);
+                // Resize handle at the bottom-right corner of the label box.
+                // Only shown on the interactive document (hidden in print via CSS).
+                const handleSize = Math.max(1.6, 1.8 * scale);
+                const handle = rootDoc.createElementNS(NS, 'rect');
+                handle.setAttribute('class', 'mk-resize');
+                handle.setAttribute('data-part', name);
+                handle.setAttribute('x', boxX + boxW - handleSize);
+                handle.setAttribute('y', boxY + boxH - handleSize);
+                handle.setAttribute('width', handleSize);
+                handle.setAttribute('height', handleSize);
+                handle.setAttribute('rx', 0.3); handle.setAttribute('ry', 0.3);
+                g.appendChild(handle);
                 g.appendChild(c); g.appendChild(ttl);
                 svg.appendChild(g);
             });
+            // Wire drag handlers for the live (interactive) document only.
+            if (rootDoc === document) {
+                try { _injuryWireLabelDrag(); } catch(_){}
+            }
         }
+
+        // Attach pointer-based drag to every label group. Idempotent — the
+        // handler is stored on the SVG element and reused across renders.
+        function _injuryWireLabelDrag(){
+            const svgs = [
+                document.getElementById('injuryMarkerSvgFront'),
+                document.getElementById('injuryMarkerSvgBack')
+            ].filter(Boolean);
+            svgs.forEach(svg => {
+                if (svg.__injuryDragWired) return;
+                svg.__injuryDragWired = true;
+                let active = null; // { mode:'drag'|'resize', part, startX, startY, ... }
+                svg.addEventListener('pointerdown', (e) => {
+                    const map = window.injuryPlacedParts;
+                    if (!map || !map.get) return;
+                    const handle = e.target.closest && e.target.closest('.mk-resize');
+                    if (handle && svg.contains(handle)) {
+                        const part = handle.getAttribute('data-part');
+                        const entry = map.get(part);
+                        if (!entry) return;
+                        e.preventDefault();
+                        try { handle.setPointerCapture(e.pointerId); } catch(_){}
+                        active = {
+                            mode: 'resize', part, handle,
+                            startX: e.clientX, startY: e.clientY,
+                            startScale: (typeof entry.labelScale === 'number') ? entry.labelScale : 1,
+                            rectPx: svg.getBoundingClientRect()
+                        };
+                        return;
+                    }
+                    const drag = e.target.closest && e.target.closest('.mk-drag');
+                    if (!drag || !svg.contains(drag)) return;
+                    const part = drag.getAttribute('data-part');
+                    const entry = map.get(part);
+                    if (!entry) return;
+                    e.preventDefault();
+                    drag.classList.add('dragging');
+                    try { drag.setPointerCapture(e.pointerId); } catch(_){}
+                    active = {
+                        mode: 'drag', part, drag,
+                        startX: e.clientX,
+                        startY: e.clientY,
+                        startDx: (typeof entry.labelDx === 'number') ? entry.labelDx : 0,
+                        startDy: (typeof entry.labelDy === 'number') ? entry.labelDy : 0,
+                        rectPx: svg.getBoundingClientRect()
+                    };
+                });
+                svg.addEventListener('pointermove', (e) => {
+                    if (!active) return;
+                    const r = active.rectPx;
+                    if (!r || !r.width || !r.height) return;
+                    const map = window.injuryPlacedParts;
+                    const entry = map && map.get && map.get(active.part);
+                    if (!entry) return;
+                    if (active.mode === 'resize') {
+                        // Average of X/Y delta (in viewBox units) drives scale.
+                        const dxVB = (e.clientX - active.startX) * 100 / r.width;
+                        const dyVB = (e.clientY - active.startY) * 100 / r.height;
+                        const delta = (dxVB + dyVB) / 2;
+                        // 10 viewBox units of drag ≈ +1.0 scale.
+                        let next = active.startScale + delta / 10;
+                        next = Math.max(0.5, Math.min(3, next));
+                        entry.labelScale = next;
+                    } else {
+                        const dxVB = (e.clientX - active.startX) * 100 / r.width;
+                        const dyVB = (e.clientY - active.startY) * 100 / r.height;
+                        entry.labelDx = active.startDx + dxVB;
+                        entry.labelDy = active.startDy + dyVB;
+                    }
+                    _injuryRenderMarkersInto(document);
+                });
+                const end = (e) => {
+                    if (!active) return;
+                    if (active.mode === 'drag' && active.drag) active.drag.classList.remove('dragging');
+                    const target = active.mode === 'resize' ? active.handle : active.drag;
+                    try { target && target.releasePointerCapture(e.pointerId); } catch(_){}
+                    active = null;
+                };
+                svg.addEventListener('pointerup', end);
+                svg.addEventListener('pointercancel', end);
+            });
+        }
+
         // Expose for html2pdf onclone hook + print events
         window.injuryRenderMarkersInto = _injuryRenderMarkersInto;
         window.addEventListener('beforeprint', injuryUpdateMarkerOverlay);
