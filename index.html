@@ -193,6 +193,35 @@
         body.dark-mode .top-nav .brand {
             color: #7dd3fc;
         }
+
+        .ymco-brand-mark {
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #0f4c75, #00b4d8);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            box-shadow: 0 8px 24px rgba(0, 180, 216, .4), inset 0 1px 0 rgba(255, 255, 255, .3);
+            flex-shrink: 0;
+        }
+        .ymco-brand-mark svg { width: 28px; height: 28px; }
+        .top-nav .ymco-brand-mark { width: 36px; height: 36px; border-radius: 10px; }
+        .top-nav .ymco-brand-mark svg { width: 20px; height: 20px; }
+        .header .ymco-brand-mark { width: 64px; height: 64px; border-radius: 16px; }
+        .header .ymco-brand-mark svg { width: 32px; height: 32px; }
+        #splash-screen .ymco-brand-mark { width: 60px; height: 60px; }
+        #splash-screen .ymco-brand-mark svg { width: 32px; height: 32px; }
+        .auth-brand .ymco-brand-mark { width: 54px; height: 54px; }
+        .auth-brand .ymco-brand-mark svg { width: 26px; height: 26px; }
+        .auth-hero-logo .ymco-brand-mark { width: 56px; height: 56px; }
+        .auth-hero-logo .ymco-brand-mark svg { width: 28px; height: 28px; }
+        body.dark-mode .ymco-brand-mark {
+            background: linear-gradient(135deg, #1e3a5f, #3282b8);
+            box-shadow: 0 8px 24px rgba(50, 130, 184, .4), inset 0 1px 0 rgba(255, 255, 255, .2);
+        }
+
         .top-nav a,
         .top-nav .nav-btn {
             color: var(--text-secondary);
@@ -5802,7 +5831,14 @@ label:has(input[type="checkbox"]:disabled:checked) {
 #splash-screen .splash-img-wrap{position:absolute;inset:0;width:100%;height:100%;z-index:1;animation:splashIn 1s ease;}
 #splash-screen::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 20% 80%,rgba(0,180,216,.15),transparent 50%),radial-gradient(circle at 80% 20%,rgba(0,180,216,.1),transparent 50%);pointer-events:none;}
 #splash-screen .ymco-logo{display:flex;align-items:center;gap:16px;margin-bottom:22px;animation:splashIn .7s ease;position:relative;z-index:2;}
-#splash-screen .ymco-mark{width:60px;height:60px;border-radius:14px;background:linear-gradient(135deg,#00b4d8,#0077b6);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,180,216,.4),inset 0 1px 0 rgba(255,255,255,.3);position:relative;}
+#splash-screen .ymco-mark{
+            width:60px; height:60px; border-radius:14px;
+            background:linear-gradient(135deg,#0f4c75,#00b4d8);
+            display:flex; align-items:center; justify-content:center;
+            color:#fff;
+            box-shadow:0 8px 24px rgba(0,180,216,.4), inset 0 1px 0 rgba(255,255,255,.3);
+            position:relative;
+        }
 #splash-screen .ymco-mark svg{width:32px;height:32px;}
 #splash-screen .ymco-text{display:flex;flex-direction:column;line-height:1;}
 #splash-screen .ymco-name{font-family:'Playfair Display','Inter',serif;font-size:clamp(2.4rem,6.5vw,3.6rem);font-weight:900;letter-spacing:10px;background:linear-gradient(180deg,#0a3d7a 0%,#0a2a5e 55%,#001f4d 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;text-shadow:0 2px 30px rgba(10,42,94,.45);padding-left:10px;text-align:center;}
@@ -6132,14 +6168,12 @@ body.splash-active{overflow:hidden;}
   .auth-hero-top, .auth-hero-mid, .auth-hero-bot{ position:relative; z-index:2; }
   .auth-hero-logo{ display:flex; align-items:center; gap:14px; }
   .auth-hero-logo .mark{
-    width:56px; height:56px; border-radius:16px;
-    background:rgba(255,255,255,.15);
-    backdrop-filter:blur(10px);
-    border:1px solid rgba(255,255,255,.3);
-    display:flex; align-items:center; justify-content:center;
-    color:#fff; font-size:24px;
-    box-shadow:0 10px 30px -10px rgba(0,0,0,.4);
-  }
+            width:56px; height:56px; border-radius:14px;
+            background:linear-gradient(135deg,#0f4c75,#00b4d8);
+            display:flex; align-items:center; justify-content:center;
+            color:#fff; font-size:24px;
+            box-shadow:0 8px 24px rgba(0,180,216,.4), inset 0 1px 0 rgba(255,255,255,.3);
+        }
   .auth-hero-logo .txt{ line-height:1.1; }
   .auth-hero-logo .txt b{ font-size:20px; font-weight:800; letter-spacing:.3px; display:block; }
   .auth-hero-logo .txt span{ font-size:12px; opacity:.8; font-weight:500; }
@@ -6189,15 +6223,13 @@ body.splash-active{overflow:hidden;}
 
   .auth-brand{ display:flex; align-items:center; gap:14px; margin-bottom:6px; }
   .auth-brand-mark{
-    width:54px; height:54px; border-radius:16px;
-    background:linear-gradient(135deg,#0f4c75,#00b4d8);
-    display:flex; align-items:center; justify-content:center;
-    color:#fff; font-size:24px;
-    box-shadow:
-      0 10px 24px -8px rgba(0,180,216,.6),
-      0 0 0 1px rgba(255,255,255,.5) inset;
-    position:relative;
-  }
+            width:54px; height:54px; border-radius:14px;
+            background:linear-gradient(135deg,#0f4c75,#00b4d8);
+            display:flex; align-items:center; justify-content:center;
+            color:#fff; font-size:24px;
+            box-shadow:0 8px 24px rgba(0,180,216,.4), inset 0 1px 0 rgba(255,255,255,.3);
+            position:relative;
+        }
   .auth-brand-mark::after{
     content:""; position:absolute; inset:-3px; border-radius:18px;
     background:linear-gradient(135deg,#00b4d8,#0f4c75);
@@ -6514,7 +6546,7 @@ body.splash-active{overflow:hidden;}
   <aside class="auth-hero" aria-hidden="true">
     <div class="auth-hero-top">
       <div class="auth-hero-logo">
-        <div class="mark"><i class="fas fa-heartbeat"></i></div>
+        <div class="mark ymco-brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M5 12c0-3.5 2.5-6.5 7-6.5s7 3 7 6.5"/><path d="M2 13h20"/><line x1="12" y1="5.5" x2="12" y2="8"/><path d="M7 13V11c0-1 .5-2 1.5-2"/><path d="M17 13V11c0-1-.5-2-1.5-2"/><path d="M7 13c0 2.5 2.5 5 5 5s5-2.5 5-5"/><circle cx="12" cy="18" r="1.5" fill="currentColor"/></svg></div>
         <div class="txt"><b>YMCO Medical</b><span>Construction Health & Safety</span></div>
       </div>
     </div>
@@ -6532,7 +6564,7 @@ body.splash-active{overflow:hidden;}
   <div class="auth-card">
 
     <div class="auth-brand">
-      <div class="auth-brand-mark"><i class="fas fa-heartbeat"></i></div>
+      <div class="auth-brand-mark ymco-brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M5 12c0-3.5 2.5-6.5 7-6.5s7 3 7 6.5"/><path d="M2 13h20"/><line x1="12" y1="5.5" x2="12" y2="8"/><path d="M7 13V11c0-1 .5-2 1.5-2"/><path d="M17 13V11c0-1-.5-2-1.5-2"/><path d="M7 13c0 2.5 2.5 5 5 5s5-2.5 5-5"/><circle cx="12" cy="18" r="1.5" fill="currentColor"/></svg></div>
       <div class="auth-brand-text">
         <div class="t1">YMCO Medical</div>
         <div class="t2">Construction Health & Safety Records</div>
@@ -6684,12 +6716,7 @@ body.splash-active{overflow:hidden;}
 
 <div id="splash-screen">
   <div class="ymco-logo">
-    <div class="ymco-mark">
-      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 21s-7-4.5-7-10a5 5 0 0 1 9-3 5 5 0 0 1 9 3c0 5.5-7 10-7 10z" stroke="#fff" stroke-width="1.8" stroke-linejoin="round" fill="rgba(255,255,255,.1)"/>
-        <path d="M8 12h2l1.5-3 2 6 1.5-3h2" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>
-    </div>
+    <div class="ymco-mark ymco-brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M5 12c0-3.5 2.5-6.5 7-6.5s7 3 7 6.5"/><path d="M2 13h20"/><line x1="12" y1="5.5" x2="12" y2="8"/><path d="M7 13V11c0-1 .5-2 1.5-2"/><path d="M17 13V11c0-1-.5-2-1.5-2"/><path d="M7 13c0 2.5 2.5 5 5 5s5-2.5 5-5"/><circle cx="12" cy="18" r="1.5" fill="#fff"/></svg></div>
     <div class="ymco-text">
       <div class="ymco-name">YMCO</div>
       <div class="ymco-sub"><span>Medical</span></div>
@@ -6715,7 +6742,7 @@ window.YMCO_showSplash = function(){
 </script>
 
     <nav class="top-nav">
-        <span class="brand"><i class="fas fa-hard-hat"></i> YMCO Medical</span>
+        <span class="brand"><div class="ymco-brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M5 12c0-3.5 2.5-6.5 7-6.5s7 3 7 6.5"/><path d="M2 13h20"/><line x1="12" y1="5.5" x2="12" y2="8"/><path d="M7 13V11c0-1 .5-2 1.5-2"/><path d="M17 13V11c0-1-.5-2-1.5-2"/><path d="M7 13c0 2.5 2.5 5 5 5s5-2.5 5-5"/><circle cx="12" cy="18" r="1.5" fill="#fff"/></svg></div>
         <div class="nav-actions" id="navActions">
             <button class="nav-btn active" id="navDashboard" onclick="showDashboard()"><i class="fas fa-chart-pie"></i> Dashboard</button>
             <button class="nav-btn" id="navWorkers" onclick="showWorkers()"><i class="fas fa-users"></i> Workers</button>
@@ -6726,7 +6753,8 @@ window.YMCO_showSplash = function(){
 
     <div class="container">
         <div class="header">
-            <h1><i class="fas fa-building"></i> Construction Site Medical Records</h1>
+            <div class="ymco-brand-mark" style="margin:0 auto 12px;"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M5 12c0-3.5 2.5-6.5 7-6.5s7 3 7 6.5"/><path d="M2 13h20"/><line x1="12" y1="5.5" x2="12" y2="8"/><path d="M7 13V11c0-1 .5-2 1.5-2"/><path d="M17 13V11c0-1-.5-2-1.5-2"/><path d="M7 13c0 2.5 2.5 5 5 5s5-2.5 5-5"/><circle cx="12" cy="18" r="1.5" fill="#fff"/></svg></div>
+            <h1>Construction Site Medical Records</h1>
             <p>Physical Examination Assessment Reports & Site Clinic Reports & Occupational Injury/Illness Reports</p>
         </div>
 
