@@ -1544,6 +1544,101 @@
             }
         }
 
+        /* ============ NOTIFICATIONS BELL (per-user inbox) ============ */
+        .notif-bell-wrap { position: relative; display: inline-flex; align-items: center; }
+        .notif-bell {
+            background: transparent; border: 1px solid rgba(255,255,255,0.25);
+            color: #fff; width: 40px; height: 40px; border-radius: 10px;
+            display: inline-flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: all .2s ease; margin-right: 8px;
+            font-size: 16px; position: relative;
+        }
+        .notif-bell:hover { background: rgba(255,255,255,0.12); transform: translateY(-1px); }
+        .notif-bell.has-unread i { animation: notifBellShake 1.6s ease-in-out infinite; color: #fde047; }
+        @keyframes notifBellShake {
+            0%, 60%, 100% { transform: rotate(0); }
+            65% { transform: rotate(-14deg); } 70% { transform: rotate(12deg); }
+            75% { transform: rotate(-8deg); }  80% { transform: rotate(6deg); }
+            85% { transform: rotate(0); }
+        }
+        .notif-badge {
+            position: absolute; top: -4px; right: -4px; min-width: 18px; height: 18px;
+            padding: 0 5px; border-radius: 9px; background: #ef4444; color: #fff;
+            font-size: 11px; font-weight: 700; display: none;
+            align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(239,68,68,.5);
+            border: 2px solid rgba(11,18,32,0.9);
+        }
+        .notif-badge.show { display: inline-flex; }
+        .notif-panel {
+            position: absolute; top: calc(100% + 10px); right: 0; width: 380px; max-width: calc(100vw - 24px);
+            max-height: 520px; background: var(--card-bg, #ffffff); color: var(--text, #111827);
+            border: 1px solid var(--border, #e5e7eb); border-radius: 14px;
+            box-shadow: 0 20px 50px rgba(0,0,0,.25); z-index: 4000; overflow: hidden;
+            display: none; flex-direction: column;
+            animation: notifPanelIn .18s ease-out;
+        }
+        .notif-panel.open { display: flex; }
+        @keyframes notifPanelIn { from { opacity:0; transform: translateY(-6px);} to { opacity:1; transform: translateY(0);} }
+        .notif-panel-head {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 14px; border-bottom: 1px solid var(--border, #e5e7eb);
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: #fff;
+        }
+        .notif-panel-head h4 { margin: 0; font-size: 15px; font-weight: 700; }
+        .notif-panel-head .np-actions { display: flex; gap: 6px; }
+        .notif-panel-head button {
+            background: rgba(255,255,255,0.18); color: #fff; border: none;
+            padding: 5px 9px; border-radius: 7px; cursor: pointer; font-size: 11px; font-weight: 600;
+        }
+        .notif-panel-head button:hover { background: rgba(255,255,255,0.3); }
+        .notif-push-cta {
+            padding: 10px 14px; background: #fef3c7; color: #92400e; font-size: 12px;
+            border-bottom: 1px solid #fde68a; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+        }
+        .notif-push-cta button {
+            background: #f59e0b; color: #fff; border: none; padding: 6px 12px;
+            border-radius: 7px; font-size: 12px; font-weight: 700; cursor: pointer;
+        }
+        .notif-push-cta.hidden { display: none; }
+        .notif-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+        .notif-empty { padding: 40px 20px; text-align: center; color: #6b7280; font-size: 13px; }
+        .notif-empty i { font-size: 32px; opacity: .5; display: block; margin-bottom: 8px; }
+        .notif-item {
+            display: flex; gap: 10px; padding: 12px 14px; cursor: pointer;
+            border-bottom: 1px solid rgba(0,0,0,0.05); transition: background .15s ease;
+        }
+        .notif-item:hover { background: rgba(99,102,241,0.06); }
+        .notif-item.unread { background: rgba(99,102,241,0.08); }
+        .notif-item.unread .notif-item-title::before {
+            content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+            background: #4f46e5; margin-right: 6px; vertical-align: middle;
+        }
+        .notif-item-icon {
+            width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+            display: inline-flex; align-items: center; justify-content: center;
+            color: #fff; font-size: 14px;
+        }
+        .notif-item-icon.worker { background: linear-gradient(135deg, #10b981, #059669); }
+        .notif-item-icon.physical { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+        .notif-item-icon.clinic { background: linear-gradient(135deg, #06b6d4, #0891b2); }
+        .notif-item-icon.injury { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .notif-item-body { flex: 1; min-width: 0; }
+        .notif-item-title { font-size: 13px; font-weight: 600; color: var(--text, #111827); margin: 0 0 2px; }
+        .notif-item-desc { font-size: 12px; color: #6b7280; margin: 0; line-height: 1.4;
+            overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+        .notif-item-time { font-size: 11px; color: #9ca3af; margin-top: 4px; }
+        body.dark-mode .notif-panel { background: #1f2937; color: #f3f4f6; border-color: #374151; }
+        body.dark-mode .notif-item { border-bottom-color: rgba(255,255,255,0.05); }
+        body.dark-mode .notif-item-title { color: #f3f4f6; }
+        body.dark-mode .notif-item-desc { color: #9ca3af; }
+        body.dark-mode .notif-item.unread { background: rgba(99,102,241,0.18); }
+        body.dark-mode .notif-empty { color: #9ca3af; }
+        @media (max-width: 640px) {
+            .notif-panel { position: fixed; top: 60px; right: 8px; left: 8px; width: auto; max-height: 70vh; }
+        }
+
+
+
         /* Clinic & Injury specific styles */
         .clinic-section {
             border: 2px solid var(--border);
@@ -6785,7 +6880,30 @@ window.YMCO_showSplash = function(){
             <button class="nav-btn" id="navWorkers" onclick="showWorkers()"><i class="fas fa-users"></i> Workers</button>
             <button class="nav-btn" id="navNewWorker" onclick="openAddWorkerModal()"><i class="fas fa-plus" style="color:#10b981;"></i> New Worker</button>
         </div>
+        <div class="notif-bell-wrap" id="notifBellWrap">
+            <button class="notif-bell" id="notifBell" title="Notifications" onclick="toggleNotifPanel(event)" aria-label="Notifications">
+                <i class="fas fa-bell"></i>
+                <span class="notif-badge" id="notifBadge">0</span>
+            </button>
+            <div class="notif-panel" id="notifPanel" role="dialog" aria-label="Notifications panel">
+                <div class="notif-panel-head">
+                    <h4><i class="fas fa-bell"></i> Notifications</h4>
+                    <div class="np-actions">
+                        <button type="button" onclick="markAllNotifsRead()" title="Mark all as read"><i class="fas fa-check-double"></i></button>
+                        <button type="button" onclick="clearAllNotifs()" title="Clear all"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>
+                <div class="notif-push-cta hidden" id="notifPushCta">
+                    <span><i class="fas fa-bell-slash"></i> Enable browser notifications to get alerts even when this tab is in background.</span>
+                    <button type="button" onclick="requestBrowserNotifPermission()">Enable</button>
+                </div>
+                <div class="notif-list" id="notifList">
+                    <div class="notif-empty"><i class="fas fa-inbox"></i>No notifications yet</div>
+                </div>
+            </div>
+        </div>
         <button id="toggleDarkMode" class="dark-mode-btn" title="Toggle Dark Mode"><i class="fas fa-moon"></i></button>
+
     </nav>
 
     <div class="container">
@@ -7081,18 +7199,76 @@ window.YMCO_showSplash = function(){
             </div>
 
 
-            <!-- Quick Actions Bar -->
-            <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;align-items:center;margin:18px 0 28px;">
-                <button class="btn" onclick="exportJSON()" title="Export all data as JSON file" style="background:linear-gradient(135deg,#6366f1,#4f46e5);min-width:120px;"><i class="fas fa-file-code"></i> Export JSON</button>
-                <button class="btn" onclick="document.getElementById('importJsonInput').click()" title="Import data from JSON file" style="background:linear-gradient(135deg,#10b981,#059669);min-width:120px;"><i class="fas fa-file-import"></i> Import JSON</button>
-                <button class="btn" onclick="cloudBackup()" title="Backup all data to Lovable Cloud" style="background:linear-gradient(135deg,#0ea5e9,#0284c7);min-width:120px;"><i class="fas fa-cloud-upload-alt"></i> Backup to Cloud</button>
-                <button class="btn" onclick="cloudRestore()" title="Restore from Lovable Cloud backup" style="background:linear-gradient(135deg,#f59e0b,#d97706);min-width:120px;"><i class="fas fa-cloud-download-alt"></i> Restore from Cloud</button>
-                <button class="btn" onclick="printAllWorkerIdCards()" title="Print QR ID cards for all workers" style="background:linear-gradient(135deg,#0f4c75,#3282b8);min-width:120px;"><i class="fas fa-id-badge"></i> Print All ID Cards</button>
-                <button class="btn" onclick="openQrScanner()" title="Scan worker QR code to open file" style="background:linear-gradient(135deg,#16a34a,#15803d);min-width:120px;"><i class="fas fa-qrcode"></i> Scan QR</button>
-                <button class="btn" onclick="openMonthlyInjuryReport()" title="Generate monthly injury report (PDF)" style="background:linear-gradient(135deg,#dc2626,#991b1b);min-width:120px;"><i class="fas fa-file-medical-alt"></i> Monthly Injury Report</button>
-                <button class="btn" onclick="openEmergencyQRModal()" title="Generate Smart Emergency QR for a worker" style="background:linear-gradient(135deg,#ea580c,#b91c1c);min-width:120px;"><i class="fas fa-ambulance"></i> Smart Emergency QR</button>
-                 <button class="btn perm-medical_emergency_qr" onclick="openMedicalEmergencyQRModal()" title="Public medical help request QR (no worker data shown)" style="background:linear-gradient(135deg,#dc2626,#7f1d1d);min-width:120px;"><i class="fas fa-truck-medical"></i> Medical Emergency QR</button>
-                 <button class="btn perm-medical_emergency_qr" onclick="openAlertsHistory()" title="Emergency Alerts History — سجل بلاغات الطوارئ الطبية" style="background:linear-gradient(135deg,#0f4c75,#3282b8);min-width:120px;"><i class="fas fa-clipboard-list"></i> Emergency Alerts History</button>
+            <!-- Quick Actions Toolbar -->
+            <style>
+                .qa-toolbar{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:stretch;justify-content:center;
+                    background:rgba(255,255,255,0.55);backdrop-filter:blur(8px);
+                    border:1px solid rgba(148,163,184,0.25);border-radius:16px;
+                    padding:14px 18px;margin:18px 0 28px;
+                    box-shadow:0 2px 12px rgba(15,23,42,0.05);}
+                .dark-mode .qa-toolbar,body.dark .qa-toolbar{background:rgba(15,23,42,0.55);border-color:rgba(148,163,184,0.18);box-shadow:0 2px 12px rgba(0,0,0,0.25);}
+                .qa-group{display:flex;flex-direction:column;gap:8px;min-width:0;}
+                .qa-group + .qa-group{border-inline-start:1px solid rgba(148,163,184,0.28);padding-inline-start:22px;}
+                .qa-group-label{font-size:10.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;
+                    color:#64748b;opacity:.85;padding-inline-start:4px;}
+                .dark-mode .qa-group-label,body.dark .qa-group-label{color:#94a3b8;}
+                .qa-group-row{display:flex;flex-wrap:wrap;gap:8px;}
+                .qa-btn{display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border-radius:10px;
+                    font-size:13px;font-weight:600;line-height:1;cursor:pointer;
+                    border:1px solid rgba(148,163,184,0.35);background:rgba(255,255,255,0.7);color:#334155;
+                    transition:all .18s ease;white-space:nowrap;}
+                .qa-btn:hover{transform:translateY(-1px);border-color:rgba(148,163,184,0.6);
+                    background:#fff;box-shadow:0 4px 12px rgba(15,23,42,0.08);}
+                .dark-mode .qa-btn,body.dark .qa-btn{background:rgba(30,41,59,0.7);color:#e2e8f0;border-color:rgba(148,163,184,0.22);}
+                .dark-mode .qa-btn:hover,body.dark .qa-btn:hover{background:rgba(30,41,59,1);box-shadow:0 4px 12px rgba(0,0,0,0.35);}
+                .qa-btn i{font-size:14px;}
+                .qa-btn.i-indigo i{color:#6366f1;}
+                .qa-btn.i-green  i{color:#10b981;}
+                .qa-btn.i-sky    i{color:#0ea5e9;}
+                .qa-btn.i-amber  i{color:#f59e0b;}
+                .qa-btn.i-blue   i{color:#3282b8;}
+                .qa-btn.i-emerald i{color:#16a34a;}
+                /* Emergency = solid, high-emphasis */
+                .qa-btn.qa-danger{color:#fff;border:none;
+                    background:linear-gradient(135deg,#dc2626,#991b1b);
+                    box-shadow:0 3px 10px rgba(220,38,38,.28);}
+                .qa-btn.qa-danger:hover{background:linear-gradient(135deg,#ef4444,#b91c1c);box-shadow:0 6px 16px rgba(220,38,38,.4);}
+                .qa-btn.qa-warn{color:#fff;border:none;
+                    background:linear-gradient(135deg,#ea580c,#b91c1c);
+                    box-shadow:0 3px 10px rgba(234,88,12,.28);}
+                .qa-btn.qa-warn:hover{background:linear-gradient(135deg,#f97316,#c2410c);box-shadow:0 6px 16px rgba(234,88,12,.4);}
+                @media(max-width:900px){
+                    .qa-group + .qa-group{border-inline-start:none;padding-inline-start:0;
+                        border-top:1px solid rgba(148,163,184,0.22);padding-top:12px;}
+                    .qa-group-row{justify-content:center;}
+                }
+            </style>
+            <div class="qa-toolbar" role="toolbar" aria-label="Quick actions">
+                <div class="qa-group">
+                    <span class="qa-group-label"><i class="fas fa-database"></i> Data</span>
+                    <div class="qa-group-row">
+                        <button class="qa-btn i-indigo" onclick="exportJSON()" title="Export all data as JSON file"><i class="fas fa-file-code"></i> Export JSON</button>
+                        <button class="qa-btn i-green" onclick="document.getElementById('importJsonInput').click()" title="Import data from JSON file"><i class="fas fa-file-import"></i> Import JSON</button>
+                        <button class="qa-btn i-sky" onclick="cloudBackup()" title="Backup all data to Lovable Cloud"><i class="fas fa-cloud-upload-alt"></i> Backup</button>
+                        <button class="qa-btn i-amber" onclick="cloudRestore()" title="Restore from Lovable Cloud backup"><i class="fas fa-cloud-download-alt"></i> Restore</button>
+                    </div>
+                </div>
+                <div class="qa-group">
+                    <span class="qa-group-label"><i class="fas fa-qrcode"></i> QR &amp; Print</span>
+                    <div class="qa-group-row">
+                        <button class="qa-btn i-blue" onclick="printAllWorkerIdCards()" title="Print QR ID cards for all workers"><i class="fas fa-id-badge"></i> Print ID Cards</button>
+                        <button class="qa-btn i-emerald" onclick="openQrScanner()" title="Scan worker QR code to open file"><i class="fas fa-qrcode"></i> Scan QR</button>
+                        <button class="qa-btn i-blue" onclick="openMonthlyInjuryReport()" title="Generate monthly injury report (PDF)"><i class="fas fa-file-medical-alt"></i> Monthly Injury Report</button>
+                    </div>
+                </div>
+                <div class="qa-group">
+                    <span class="qa-group-label"><i class="fas fa-triangle-exclamation"></i> Emergency</span>
+                    <div class="qa-group-row">
+                        <button class="qa-btn qa-warn" onclick="openEmergencyQRModal()" title="Generate Smart Emergency QR for a worker"><i class="fas fa-ambulance"></i> Smart Emergency QR</button>
+                        <button class="qa-btn qa-danger perm-medical_emergency_qr" onclick="openMedicalEmergencyQRModal()" title="Public medical help request QR (no worker data shown)"><i class="fas fa-truck-medical"></i> Medical Emergency QR</button>
+                        <button class="qa-btn perm-medical_emergency_qr i-blue" onclick="openAlertsHistory()" title="Emergency Alerts History — سجل بلاغات الطوارئ الطبية"><i class="fas fa-clipboard-list"></i> Alerts History</button>
+                    </div>
+                </div>
             </div>
             <div class="workers-grid" id="workersGrid"></div>
         </div>
@@ -10670,6 +10846,17 @@ window.YMCO_showSplash = function(){
             refreshDashboard();
             closeWorkerModal();
             showNotification('Worker saved');
+            if (!document.getElementById('editWorkerId').value) {
+                try {
+                    notifyAllUsers({
+                        type: 'new_worker',
+                        title: 'New worker added',
+                        body: `${newData.name} — ID: ${newData.id}` + (newData.role ? ` (${newData.role})` : ''),
+                        workerId: newData.id
+                    });
+                } catch(e){ console.warn('notifyAllUsers(new_worker) failed', e); }
+            }
+
         });
 
         // ==================== PHYSICAL EXAMINATION ====================
@@ -10757,6 +10944,15 @@ window.YMCO_showSplash = function(){
                 // Broadcast to all users
                 const workerName = currentWorkerForPhysical ? currentWorkerForPhysical.name : 'Unknown';
                 broadcastNotification(`New Physical Exam added for ${workerName}`, 'physical');
+                try {
+                    notifyAllUsers({
+                        type: 'new_report', reportType: 'physical',
+                        title: 'New Physical Exam report',
+                        body: `${name} — worker: ${workerName}`,
+                        workerId: currentWorkerForPhysical ? currentWorkerForPhysical.id : ''
+                    });
+                } catch(e){ console.warn('notifyAllUsers(physical) failed', e); }
+
             }
             saveAllData();
             updateStatsAndRender();
@@ -12269,6 +12465,15 @@ window.YMCO_showSplash = function(){
                 // Broadcast to all users
                 const workerName = currentWorkerForClinic ? currentWorkerForClinic.name : 'Unknown';
                 broadcastNotification(`New Clinic Report added for ${workerName}`, 'clinic');
+                try {
+                    notifyAllUsers({
+                        type: 'new_report', reportType: 'clinic',
+                        title: 'New Site Clinic report',
+                        body: `${name} — worker: ${workerName}`,
+                        workerId: currentWorkerForClinic ? currentWorkerForClinic.id : ''
+                    });
+                } catch(e){ console.warn('notifyAllUsers(clinic) failed', e); }
+
             }
             saveAllData();
             updateStatsAndRender();
@@ -12483,6 +12688,15 @@ window.YMCO_showSplash = function(){
                 // Broadcast to all users
                 const workerName = currentWorkerForInjury ? currentWorkerForInjury.name : 'Unknown';
                 broadcastNotification(`URGENT: New Injury/Illness Report added for ${workerName}`, 'injury');
+                try {
+                    notifyAllUsers({
+                        type: 'new_report', reportType: 'injury',
+                        title: 'URGENT: New Injury/Illness report',
+                        body: `${name} — worker: ${workerName}`,
+                        workerId: currentWorkerForInjury ? currentWorkerForInjury.id : ''
+                    });
+                } catch(e){ console.warn('notifyAllUsers(injury) failed', e); }
+
             }
             saveAllData();
             updateStatsAndRender();
@@ -15551,7 +15765,337 @@ function viewIdPhotoFull() {
             }
         }
 
+        /* ============================================
+           PER-USER NOTIFICATIONS INBOX (Firebase RTDB)
+           Structure: notifications/{uid}/{pushId} = {
+             type, reportType?, title, body, workerId?,
+             actorUid, actorName, createdAt, read
+           }
+           Firebase RTDB rules should include:
+             "notifications": {
+               "$uid": {
+                 ".read": "auth != null && auth.uid === $uid",
+                 ".write": "auth != null"
+               }
+             }
+           ============================================ */
+        (function(){
+            const LS_LAST_SEEN = 'ymco_notif_last_seen_ts';
+            let userNotifsRef = null;
+            let userNotifsListenerAdded = null;
+            let userNotifsListenerChanged = null;
+            let userNotifsListenerRemoved = null;
+            let notifCache = {}; // { id: notif }
+            let firstLoadDone = false;
+            let lastSeenTs = parseInt(localStorage.getItem(LS_LAST_SEEN) || '0', 10) || 0;
+
+            function fmtTime(ts){
+                if(!ts) return '';
+                const diff = Date.now() - ts;
+                if(diff < 60000) return 'just now';
+                if(diff < 3600000) return Math.floor(diff/60000) + 'm ago';
+                if(diff < 86400000) return Math.floor(diff/3600000) + 'h ago';
+                const d = new Date(ts);
+                return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+            }
+            function escapeHTML(s){
+                return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+                    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+            }
+            function iconClassFor(n){
+                if(n.type === 'new_worker') return 'worker';
+                if(n.type === 'new_report'){
+                    if(n.reportType === 'physical') return 'physical';
+                    if(n.reportType === 'clinic')   return 'clinic';
+                    if(n.reportType === 'injury')   return 'injury';
+                }
+                return 'worker';
+            }
+            function iconFor(n){
+                if(n.type === 'new_worker') return 'fa-user-plus';
+                if(n.type === 'new_report'){
+                    if(n.reportType === 'physical') return 'fa-stethoscope';
+                    if(n.reportType === 'clinic')   return 'fa-notes-medical';
+                    if(n.reportType === 'injury')   return 'fa-briefcase-medical';
+                }
+                return 'fa-bell';
+            }
+
+            function renderPanel(){
+                const list = document.getElementById('notifList');
+                if(!list) return;
+                const items = Object.entries(notifCache)
+                    .map(([id,n]) => ({id, ...n}))
+                    .sort((a,b) => (b.createdAt||0) - (a.createdAt||0))
+                    .slice(0, 50);
+                if(items.length === 0){
+                    list.innerHTML = '<div class="notif-empty"><i class="fas fa-inbox"></i>No notifications yet</div>';
+                } else {
+                    list.innerHTML = items.map(n => `
+                        <div class="notif-item ${n.read ? '' : 'unread'}" data-id="${escapeHTML(n.id)}" data-worker="${escapeHTML(n.workerId||'')}">
+                            <span class="notif-item-icon ${iconClassFor(n)}"><i class="fas ${iconFor(n)}"></i></span>
+                            <div class="notif-item-body">
+                                <p class="notif-item-title">${escapeHTML(n.title||'Notification')}</p>
+                                <p class="notif-item-desc">${escapeHTML(n.body||'')}</p>
+                                <div class="notif-item-time">${fmtTime(n.createdAt)}${n.actorName ? ' · by ' + escapeHTML(n.actorName) : ''}</div>
+                            </div>
+                        </div>`).join('');
+                    list.querySelectorAll('.notif-item').forEach(el => {
+                        el.addEventListener('click', () => {
+                            const id = el.getAttribute('data-id');
+                            const workerId = el.getAttribute('data-worker');
+                            markNotifRead(id);
+                            closeNotifPanel();
+                            if(workerId){ openWorkerFromNotif(workerId); }
+                        });
+                    });
+                }
+                updateBadge();
+            }
+
+            function updateBadge(){
+                const badge = document.getElementById('notifBadge');
+                const bell  = document.getElementById('notifBell');
+                if(!badge || !bell) return;
+                const unread = Object.values(notifCache).filter(n => !n.read).length;
+                if(unread > 0){
+                    badge.textContent = unread > 99 ? '99+' : String(unread);
+                    badge.classList.add('show');
+                    bell.classList.add('has-unread');
+                } else {
+                    badge.classList.remove('show');
+                    bell.classList.remove('has-unread');
+                }
+            }
+
+            function openWorkerFromNotif(workerId){
+                try {
+                    if(typeof showWorkers === 'function') showWorkers();
+                    setTimeout(() => {
+                        const card = document.querySelector(`[data-worker-id="${workerId}"], #worker-card-${workerId}`);
+                        if(card){
+                            card.scrollIntoView({behavior:'smooth', block:'center'});
+                            card.style.transition = 'box-shadow .3s'; card.style.boxShadow = '0 0 0 3px #4f46e5';
+                            setTimeout(() => card.style.boxShadow = '', 2000);
+                        }
+                    }, 300);
+                } catch(e){ console.warn(e); }
+            }
+
+            function showToastForNotif(n){
+                try {
+                    const el = document.getElementById('notification');
+                    if(!el) return;
+                    el.innerHTML = `<i class="fas ${iconFor(n)}" style="margin-right:8px;"></i> ${escapeHTML(n.title||'')} — ${escapeHTML(n.body||'')}`;
+                    el.classList.add('show');
+                    el.style.background = 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)';
+                    el.style.boxShadow  = '0 12px 28px rgba(79,70,229,.35)';
+                    setTimeout(() => {
+                        el.classList.remove('show');
+                        setTimeout(() => { el.style.background=''; el.style.boxShadow=''; el.innerHTML=''; }, 400);
+                    }, 4500);
+                } catch(e){}
+            }
+
+            function showBrowserPushForNotif(n){
+                try {
+                    if(!('Notification' in window)) return;
+                    if(Notification.permission !== 'granted') return;
+                    if(!document.hidden) return; // only for background tabs
+                    const notif = new Notification(n.title || 'Notification', {
+                        body: n.body || '',
+                        icon: '/favicon.ico',
+                        tag: 'ymco-' + (n.type || 'notif'),
+                        renotify: true
+                    });
+                    notif.onclick = () => {
+                        window.focus();
+                        if(n.workerId) openWorkerFromNotif(n.workerId);
+                        notif.close();
+                    };
+                } catch(e){ console.warn('push notif failed', e); }
+            }
+
+            function updatePushCta(){
+                const cta = document.getElementById('notifPushCta');
+                if(!cta) return;
+                if('Notification' in window && Notification.permission === 'default'){
+                    cta.classList.remove('hidden');
+                } else {
+                    cta.classList.add('hidden');
+                }
+            }
+
+            window.requestBrowserNotifPermission = function(){
+                if(!('Notification' in window)){
+                    alert('Browser notifications are not supported in this browser.');
+                    return;
+                }
+                Notification.requestPermission().then(() => updatePushCta());
+            };
+
+            window.toggleNotifPanel = function(ev){
+                if(ev) ev.stopPropagation();
+                const panel = document.getElementById('notifPanel');
+                if(!panel) return;
+                panel.classList.toggle('open');
+                if(panel.classList.contains('open')){
+                    updatePushCta();
+                    // update last-seen so future sessions don't re-toast these
+                    const max = Math.max(0, ...Object.values(notifCache).map(n => n.createdAt || 0));
+                    if(max > lastSeenTs){ lastSeenTs = max; localStorage.setItem(LS_LAST_SEEN, String(lastSeenTs)); }
+                }
+            };
+            window.closeNotifPanel = function(){
+                const panel = document.getElementById('notifPanel');
+                if(panel) panel.classList.remove('open');
+            };
+            document.addEventListener('click', function(e){
+                const wrap = document.getElementById('notifBellWrap');
+                if(!wrap) return;
+                if(!wrap.contains(e.target)) window.closeNotifPanel();
+            });
+
+            function markNotifRead(id){
+                const n = notifCache[id];
+                if(!n || n.read) return;
+                n.read = true;
+                renderPanel();
+                try {
+                    const u = window.getCurrentUser && window.getCurrentUser();
+                    if(u && window.firebaseDB){
+                        window.firebaseDB.ref('notifications/' + u.uid + '/' + id).update({read: true});
+                    }
+                } catch(e){}
+            }
+
+            window.markAllNotifsRead = function(){
+                const u = window.getCurrentUser && window.getCurrentUser();
+                if(!u || !window.firebaseDB) return;
+                const updates = {};
+                Object.entries(notifCache).forEach(([id, n]) => {
+                    if(!n.read){ updates['notifications/' + u.uid + '/' + id + '/read'] = true; n.read = true; }
+                });
+                if(Object.keys(updates).length){
+                    window.firebaseDB.ref().update(updates).catch(e => console.warn(e));
+                }
+                renderPanel();
+            };
+
+            window.clearAllNotifs = function(){
+                if(!confirm('Clear all notifications?')) return;
+                const u = window.getCurrentUser && window.getCurrentUser();
+                if(!u || !window.firebaseDB) return;
+                window.firebaseDB.ref('notifications/' + u.uid).remove().catch(e => console.warn(e));
+                notifCache = {};
+                renderPanel();
+            };
+
+            // ---- Write notifications for every other active user ----
+            window.notifyAllUsers = async function(payload){
+                try {
+                    if(!window.firebaseDB){ console.warn('notifyAllUsers: firebase not ready'); return; }
+                    const me = window.getCurrentUser && window.getCurrentUser();
+                    if(!me){ console.warn('notifyAllUsers: no signed-in user'); return; }
+                    const db = window.firebaseDB;
+                    const usersSnap = await db.ref('users').get();
+                    const users = usersSnap.val() || {};
+                    const actorName = (users[me.uid] && users[me.uid].name) || me.displayName || (me.email||'').split('@')[0] || 'Someone';
+                    const record = {
+                        type: payload.type || 'notification',
+                        title: payload.title || 'Notification',
+                        body: payload.body || '',
+                        workerId: payload.workerId || '',
+                        reportType: payload.reportType || '',
+                        actorUid: me.uid,
+                        actorName: actorName,
+                        createdAt: firebase.database.ServerValue.TIMESTAMP,
+                        read: false
+                    };
+                    const updates = {};
+                    let count = 0;
+                    Object.entries(users).forEach(([uid, u]) => {
+                        if(uid === me.uid) return;
+                        if(u && u.status && u.status !== 'active') return;
+                        const nid = db.ref('notifications/' + uid).push().key;
+                        updates['notifications/' + uid + '/' + nid] = record;
+                        count++;
+                    });
+                    if(count === 0) return;
+                    await db.ref().update(updates);
+                    console.log('notifyAllUsers: sent to', count, 'user(s)');
+                } catch(e){
+                    console.error('notifyAllUsers failed:', e);
+                }
+            };
+
+            // ---- Listener attach / detach on auth state ----
+            function detach(){
+                if(userNotifsRef){
+                    try { userNotifsRef.off(); } catch(e){}
+                    userNotifsRef = null;
+                }
+                notifCache = {}; firstLoadDone = false;
+                renderPanel();
+            }
+
+            window.__initUserNotifications = function(uid){
+                detach();
+                if(!uid || !window.firebaseDB) return;
+                userNotifsRef = window.firebaseDB.ref('notifications/' + uid).orderByChild('createdAt').limitToLast(100);
+                let initialSnapshotSeen = false;
+
+                // Firebase RTDB replays every existing child on first attach → satisfies the
+                // "notify user of past notifications when back online" requirement.
+                userNotifsRef.once('value', () => { initialSnapshotSeen = true; firstLoadDone = true; renderPanel(); });
+
+                userNotifsRef.on('child_added', (snap) => {
+                    const id = snap.key; const n = snap.val() || {};
+                    notifCache[id] = n;
+                    renderPanel();
+                    // Toast + browser push only for items that arrived after last-seen
+                    // AND after the initial replay completed (avoid a wall of toasts on login).
+                    const ts = typeof n.createdAt === 'number' ? n.createdAt : 0;
+                    if(initialSnapshotSeen && ts > lastSeenTs && !n.read){
+                        showToastForNotif(n);
+                        showBrowserPushForNotif(n);
+                    }
+                });
+                userNotifsRef.on('child_changed', (snap) => {
+                    notifCache[snap.key] = snap.val() || {};
+                    renderPanel();
+                });
+                userNotifsRef.on('child_removed', (snap) => {
+                    delete notifCache[snap.key];
+                    renderPanel();
+                });
+
+                // After a short delay, replay any past notifications that arrived while
+                // the user was offline as toasts (throttled to first 5 to avoid spam).
+                setTimeout(() => {
+                    const missed = Object.values(notifCache)
+                        .filter(n => !n.read && (n.createdAt||0) > lastSeenTs)
+                        .sort((a,b) => (b.createdAt||0)-(a.createdAt||0))
+                        .slice(0, 5);
+                    if(missed.length > 1){
+                        showToastForNotif({
+                            title: `You have ${missed.length} new notifications`,
+                            body: 'Click the bell to see them.',
+                            type: 'new_worker'
+                        });
+                    }
+                    updatePushCta();
+                }, 1500);
+            };
+
+            window.__stopUserNotifications = function(){ detach(); };
+
+            // Ask for push permission the first time the user opens the bell
+            document.addEventListener('DOMContentLoaded', updatePushCta);
+        })();
+
         // ==================== SEARCH & FILTER ====================
+
         function searchWorkers() {
             const query = document.getElementById('searchInput').value.toLowerCase();
             const role = document.getElementById('filterRole').value;
@@ -18745,7 +19289,9 @@ window.toggleInjuryPrintPreview = function(){
   auth.onAuthStateChanged(async (user) => {
     if(!user){
       currentUser = null; currentUserRole = null; currentUserStatus = null; currentUserPermissions = null;
+      try { if(window.__stopUserNotifications) window.__stopUserNotifications(); } catch(e){}
       lockUI();
+
       return;
     }
     currentUser = user;
@@ -18810,6 +19356,10 @@ window.toggleInjuryPrintPreview = function(){
     applyPermissionsToDOM();
     clearMsg();
     unlockUI();
+    // ---------- Start per-user notifications inbox ----------
+    try { if(window.__initUserNotifications) window.__initUserNotifications(user.uid); }
+    catch(e){ console.warn('init user notifications failed', e); }
+
     // Show splash with nurse+worker image AFTER successful login
     if(typeof window.YMCO_showSplash === 'function') window.YMCO_showSplash();
 
@@ -20518,12 +21068,23 @@ window.toggleInjuryPrintPreview = function(){
         const __base = location.pathname.replace(/[^/]*$/, ''); const liveUrl = location.origin + __base + 'emergency.html#w=' + encodeURIComponent(w.id);
         const holder = document.createElement('div');
         stage.appendChild(holder);
-        new QRCode(holder, { text: liveUrl, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.L });
-        // Wait a tick for QR render
-        await new Promise(r => setTimeout(r, 30));
-        const img = holder.querySelector('img');
+        new QRCode(holder, { text: liveUrl, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+        // Wait for QR render (canvas + img)
+        await new Promise(r => setTimeout(r, 120));
         const canvas = holder.querySelector('canvas');
-        const qrSrc = img ? img.src : (canvas ? canvas.toDataURL('image/png') : '');
+        const img = holder.querySelector('img');
+        let qrSrc = '';
+        if (canvas) {
+          try { qrSrc = canvas.toDataURL('image/png'); } catch(_){}
+        }
+        if (!qrSrc && img) {
+          if (img.complete && img.naturalWidth > 0) {
+            qrSrc = img.src;
+          } else {
+            await new Promise(r => { img.onload = r; img.onerror = r; setTimeout(r, 400); });
+            qrSrc = img.src;
+          }
+        }
         cards.push({
           name: w.name || '',
           id: w.id || '',
@@ -20553,10 +21114,10 @@ window.toggleInjuryPrintPreview = function(){
         *{box-sizing:border-box}
         body{font-family:Inter,Arial,sans-serif;margin:0;padding:12px;color:#111;background:#fff}
         h1{font-size:18px;margin:0 0 12px;color:#b91c1c;text-align:center}
-        .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-        .qrcard{border:2px solid #b91c1c;border-radius:10px;padding:10px;text-align:center;page-break-inside:avoid;break-inside:avoid;background:#fff}
-        .qrcard .hd{font-size:11px;font-weight:800;color:#b91c1c;letter-spacing:1px;margin-bottom:6px}
-        .qrcard img{width:170px;height:170px;display:block;margin:0 auto 6px}
+        .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+        .qrcard{border:2px solid #b91c1c;border-radius:10px;padding:8px;text-align:center;page-break-inside:avoid;break-inside:avoid;background:#fff}
+        .qrcard .hd{font-size:10px;font-weight:800;color:#b91c1c;letter-spacing:1px;margin-bottom:4px}
+        .qrcard img{width:130px;height:130px;display:block;margin:0 auto 4px}
         .qrcard .nm{font-weight:800;font-size:14px;color:#0f172a;margin-bottom:2px}
         .qrcard .meta{font-size:11px;color:#334155;line-height:1.35}
         .qrcard .foot{margin-top:6px;font-size:9px;color:#64748b;font-style:italic}
