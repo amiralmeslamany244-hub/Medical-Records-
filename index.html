@@ -6879,6 +6879,7 @@ window.YMCO_showSplash = function(){
             <button class="nav-btn active" id="navDashboard" onclick="showDashboard()"><i class="fas fa-chart-pie"></i> Dashboard</button>
             <button class="nav-btn" id="navWorkers" onclick="showWorkers()"><i class="fas fa-users"></i> Workers</button>
             <button class="nav-btn" id="navNewWorker" onclick="openAddWorkerModal()"><i class="fas fa-plus" style="color:#10b981;"></i> New Worker</button>
+            <button class="nav-btn" id="navChecklists" onclick="openChecklistsHub()"><i class="fas fa-clipboard-check" style="color:#f59e0b;"></i> Checklists</button>
         </div>
         <div class="notif-bell-wrap" id="notifBellWrap">
             <button class="notif-bell" id="notifBell" title="Notifications" onclick="toggleNotifPanel(event)" aria-label="Notifications">
@@ -15882,8 +15883,28 @@ function viewIdPhotoFull() {
                 } catch(e){ console.warn(e); }
             }
 
+            function playSoundForNotif(n){
+                try {
+                    if(!n || typeof n !== 'object') return;
+                    if(n.type === 'new_worker'){
+                        if(typeof playCrossUserAlertSound === 'function') playCrossUserAlertSound();
+                        else if(typeof playNotificationSound === 'function') playNotificationSound();
+                        return;
+                    }
+                    if(n.type === 'new_report'){
+                        const rt = (n.reportType||'').toLowerCase();
+                        if(rt === 'physical' && typeof playPhysicalSound === 'function'){ playPhysicalSound(); return; }
+                        if(rt === 'clinic'   && typeof playClinicSound   === 'function'){ playClinicSound();   return; }
+                        if(rt === 'injury'   && typeof playInjurySound   === 'function'){ playInjurySound();   return; }
+                    }
+                    if(typeof playNotificationSound === 'function') playNotificationSound();
+                } catch(e){ /* silent */ }
+            }
+
             function showToastForNotif(n){
                 try {
+                    // Distinct audio cue per notification type (new worker / physical / clinic / injury)
+                    playSoundForNotif(n);
                     const el = document.getElementById('notification');
                     if(!el) return;
                     el.innerHTML = `<i class="fas ${iconFor(n)}" style="margin-right:8px;"></i> ${escapeHTML(n.title||'')} — ${escapeHTML(n.body||'')}`;
@@ -24155,6 +24176,510 @@ window.toggleInjuryPrintPreview = function(){
 })();
 </script>
 <!-- ================== END EMERGENCY ALERTS HISTORY MODULE ================== -->
+
+<!-- ================== CHECKLISTS MODULE (Clinic / Ambulance / First-Aid Bag / AED) ================== -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  #checklistsModal, #checklistFormModal, #checklistHistoryModal, #checklistScanModal {
+    position: fixed; inset: 0; background: rgba(15,23,42,.72); z-index: 10000;
+    display: none; align-items: flex-start; justify-content: center; padding: 24px 12px; overflow-y: auto;
+  }
+  #checklistsModal.show, #checklistFormModal.show, #checklistHistoryModal.show, #checklistScanModal.show { display: flex; }
+  .cl-panel {
+    background: #fff; color: #1e293b; width: 100%; max-width: 1100px; border-radius: 18px;
+    box-shadow: 0 25px 60px rgba(0,0,0,.35); padding: 22px 24px; position: relative; margin-bottom: 40px;
+  }
+  body.dark-mode .cl-panel { background: #0f172a; color: #e2e8f0; }
+  .cl-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+  .cl-head h2 { margin: 0; font-size: 1.35em; display: flex; align-items: center; gap: 10px; }
+  .cl-head h2 i { color: #f59e0b; }
+  .cl-close { background: transparent; border: 0; font-size: 1.4em; cursor: pointer; color: inherit; }
+  .cl-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .cl-btn {
+    border: 0; padding: 10px 16px; border-radius: 10px; cursor: pointer; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 8px; font-size: 0.92em;
+  }
+  .cl-btn-primary { background: linear-gradient(135deg,#3b82f6,#2563eb); color: #fff; }
+  .cl-btn-scan   { background: linear-gradient(135deg,#f59e0b,#d97706); color: #fff; }
+  .cl-btn-ghost  { background: #e2e8f0; color: #1e293b; }
+  body.dark-mode .cl-btn-ghost { background: #334155; color: #e2e8f0; }
+  .cl-btn-danger { background: #ef4444; color: #fff; }
+  .cl-btn-ok     { background: linear-gradient(135deg,#10b981,#059669); color: #fff; }
+  .cl-units-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr)); gap: 14px; }
+  .cl-unit-card {
+    border: 2px solid #e2e8f0; border-radius: 14px; padding: 16px; background: #f8fafc;
+    display: flex; flex-direction: column; gap: 10px; cursor: pointer; transition: all .15s;
+  }
+  body.dark-mode .cl-unit-card { background: #1e293b; border-color: #334155; }
+  .cl-unit-card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,.12); border-color: #3b82f6; }
+  .cl-unit-icon { width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center; color: #fff; font-size: 1.2em; }
+  .cl-unit-title { font-weight: 700; font-size: 1.05em; }
+  .cl-unit-meta { font-size: 0.82em; color: #64748b; }
+  body.dark-mode .cl-unit-meta { color: #94a3b8; }
+  .cl-unit-status { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 0.8em; font-weight: 700; align-self: flex-start; }
+  .cl-status-ok    { background: #d1fae5; color: #065f46; }
+  .cl-status-fail  { background: #fee2e2; color: #991b1b; }
+  .cl-status-none  { background: #e2e8f0; color: #475569; }
+  .cl-status-stale { background: #fef3c7; color: #92400e; }
+  .cl-barcode-chip { font-family: monospace; font-size: 0.78em; padding: 2px 8px; border-radius: 6px; background: #e0e7ff; color: #3730a3; }
+  body.dark-mode .cl-barcode-chip { background: #312e81; color: #c7d2fe; }
+
+  .cl-form-item {
+    display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 10px 12px; margin-bottom: 8px;
+    border-radius: 10px; background: #f1f5f9; align-items: center;
+  }
+  body.dark-mode .cl-form-item { background: #1e293b; }
+  .cl-form-item.fail { background: #fee2e2; }
+  .cl-form-item.pass { background: #d1fae5; }
+  body.dark-mode .cl-form-item.fail { background: rgba(239,68,68,.25); }
+  body.dark-mode .cl-form-item.pass { background: rgba(16,185,129,.2); }
+  .cl-form-item .cl-item-title { font-weight: 600; }
+  .cl-form-item .cl-item-toggle { display: inline-flex; gap: 6px; }
+  .cl-toggle-btn { border: 2px solid transparent; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 0.85em; background: #fff; color: #475569; }
+  body.dark-mode .cl-toggle-btn { background: #0f172a; color: #cbd5e0; }
+  .cl-toggle-btn.pass.active { background: #10b981; color: #fff; }
+  .cl-toggle-btn.fail.active { background: #ef4444; color: #fff; }
+  .cl-item-notes { grid-column: 1 / -1; width: 100%; margin-top: 6px; padding: 6px 10px; border-radius: 8px; border: 1px solid #cbd5e0; font-size: 0.9em; display: none; }
+  body.dark-mode .cl-item-notes { background: #0f172a; color: #e2e8f0; border-color: #334155; }
+  .cl-form-item.fail .cl-item-notes { display: block; }
+  .cl-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  .cl-form-row label { display: block; font-size: 0.85em; font-weight: 600; margin-bottom: 4px; }
+  .cl-form-row input { width: 100%; padding: 9px 12px; border: 1px solid #cbd5e0; border-radius: 8px; }
+  body.dark-mode .cl-form-row input { background: #0f172a; color: #e2e8f0; border-color: #334155; }
+
+  #clScanReader { width: 100%; max-width: 500px; margin: 0 auto; }
+  .cl-scan-hint { text-align: center; margin: 12px 0; color: #64748b; font-size: 0.9em; }
+
+  .cl-history-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9em; }
+  .cl-history-table th, .cl-history-table td { padding: 10px 8px; text-align: right; border-bottom: 1px solid #e2e8f0; }
+  body.dark-mode .cl-history-table th, body.dark-mode .cl-history-table td { border-color: #334155; }
+  .cl-history-table th { background: #f1f5f9; font-size: 0.85em; }
+  body.dark-mode .cl-history-table th { background: #1e293b; }
+  .cl-history-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .cl-history-filters select, .cl-history-filters input { padding: 8px 10px; border: 1px solid #cbd5e0; border-radius: 8px; }
+  body.dark-mode .cl-history-filters select, body.dark-mode .cl-history-filters input { background: #0f172a; color: #e2e8f0; border-color: #334155; }
+
+  .cl-detail-list { list-style: none; padding: 0; margin: 10px 0 0; }
+  .cl-detail-list li { padding: 8px 12px; border-radius: 8px; margin-bottom: 4px; display: flex; justify-content: space-between; gap: 10px; }
+  .cl-detail-list li.pass { background: #d1fae5; color: #065f46; }
+  .cl-detail-list li.fail { background: #fee2e2; color: #991b1b; }
+</style>
+
+<!-- Hub modal -->
+<div id="checklistsModal" role="dialog" aria-label="Checklists">
+  <div class="cl-panel">
+    <div class="cl-head">
+      <h2><i class="fas fa-clipboard-check"></i> Equipment Checklists — قوائم الفحص</h2>
+      <div class="cl-actions">
+        <button class="cl-btn cl-btn-scan" onclick="openChecklistScanner()"><i class="fas fa-qrcode"></i> Scan Barcode</button>
+        <button class="cl-btn cl-btn-primary" onclick="openChecklistHistory()"><i class="fas fa-history"></i> History</button>
+        <button class="cl-close" onclick="closeChecklistsHub()" aria-label="Close"><i class="fas fa-times"></i></button>
+      </div>
+    </div>
+    <p style="margin:0 0 14px;color:#64748b;font-size:0.9em;">
+      اختر وحدة لبدء الفحص، أو امسح باركود الوحدة بالكاميرا. النتائج تُحفظ وتظهر أدناه.
+    </p>
+    <div id="clUnitsGrid" class="cl-units-grid"></div>
+  </div>
+</div>
+
+<!-- Scanner modal -->
+<div id="checklistScanModal" role="dialog" aria-label="Scan Barcode">
+  <div class="cl-panel" style="max-width:560px;">
+    <div class="cl-head">
+      <h2><i class="fas fa-qrcode"></i> مسح الباركود</h2>
+      <button class="cl-close" onclick="closeChecklistScanner()" aria-label="Close"><i class="fas fa-times"></i></button>
+    </div>
+    <div id="clScanReader"></div>
+    <div class="cl-scan-hint">وجّه الكاميرا نحو باركود الوحدة (سيارة/عيادة/شنطة/AED)</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <input id="clManualBarcode" type="text" placeholder="أو أدخل الكود يدوياً" style="flex:1;min-width:180px;padding:9px 12px;border:1px solid #cbd5e0;border-radius:8px;" />
+      <button class="cl-btn cl-btn-primary" onclick="clSubmitManualBarcode()">فتح الفحص</button>
+    </div>
+  </div>
+</div>
+
+<!-- Checklist form modal -->
+<div id="checklistFormModal" role="dialog" aria-label="Checklist Form">
+  <div class="cl-panel">
+    <div class="cl-head">
+      <h2 id="clFormTitle"><i class="fas fa-clipboard-list"></i> Checklist</h2>
+      <button class="cl-close" onclick="closeChecklistForm()" aria-label="Close"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="cl-form-row">
+      <div>
+        <label>Technician (اسم الفني)</label>
+        <input id="clTechName" type="text" placeholder="اكتب اسمك" />
+      </div>
+      <div>
+        <label>Date / Time</label>
+        <input id="clDateTime" type="text" readonly />
+      </div>
+    </div>
+    <div id="clItemsWrap"></div>
+    <div style="margin-top:14px;">
+      <label style="font-size:0.85em;font-weight:600;">ملاحظات عامة</label>
+      <textarea id="clGeneralNotes" rows="2" style="width:100%;padding:9px 12px;border:1px solid #cbd5e0;border-radius:8px;"></textarea>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap;">
+      <button class="cl-btn cl-btn-ghost" onclick="closeChecklistForm()">إلغاء</button>
+      <button class="cl-btn cl-btn-ok" onclick="saveChecklistInspection()"><i class="fas fa-save"></i> حفظ الفحص</button>
+    </div>
+  </div>
+</div>
+
+<!-- History modal -->
+<div id="checklistHistoryModal" role="dialog" aria-label="Checklist History">
+  <div class="cl-panel">
+    <div class="cl-head">
+      <h2><i class="fas fa-history"></i> سجل الفحوصات</h2>
+      <div class="cl-actions">
+        <button class="cl-btn cl-btn-primary" onclick="clExportHistoryCSV()"><i class="fas fa-file-csv"></i> تصدير CSV</button>
+        <button class="cl-close" onclick="closeChecklistHistory()" aria-label="Close"><i class="fas fa-times"></i></button>
+      </div>
+    </div>
+    <div class="cl-history-filters">
+      <select id="clHistUnit"><option value="">كل الوحدات</option></select>
+      <select id="clHistStatus">
+        <option value="">كل الحالات</option>
+        <option value="pass">مطابق</option>
+        <option value="fail">به ملاحظات</option>
+      </select>
+      <input id="clHistFrom" type="date" />
+      <input id="clHistTo" type="date" />
+      <button class="cl-btn cl-btn-ghost" onclick="renderChecklistHistory()">تحديث</button>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="cl-history-table" id="clHistTable">
+        <thead><tr>
+          <th>الوحدة</th><th>التاريخ</th><th>الفني</th><th>الحالة</th><th>عناصر فاشلة</th><th>تفاصيل</th>
+        </tr></thead>
+        <tbody id="clHistBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const UNITS_KEY = 'ymco_checklist_units_v1';
+  const RECS_KEY  = 'ymco_checklist_inspections_v1';
+  const STALE_DAYS = 7;
+
+  const DEFAULT_UNITS = [
+    { id:'clinic', name:'أدوات العيادة', nameEn:'Clinic Instruments', barcode:'CL-CLINIC-01',
+      color:'#06b6d4', icon:'fa-stethoscope',
+      items:['سماعة الطبيب','جهاز قياس ضغط','ميزان حرارة','جهاز قياس السكر','جهاز نبضات القلب (Pulse Oximeter)',
+             'شاش وضمادات','مطهرات (بيتادين/كحول)','قفازات طبية','كمامات','سرير الفحص نظيف','إضاءة الغرفة تعمل','خزانة أدوية مرتبة'] },
+    { id:'ambulance', name:'سيارة الإسعاف', nameEn:'Ambulance Vehicle', barcode:'CL-AMB-01',
+      color:'#ef4444', icon:'fa-truck-medical',
+      items:['البنزين/الديزل ممتلئ','زيت المحرك','ماء الرادياتير','ضغط الإطارات (٤ إطارات + احتياطي)','الأنوار الأمامية','الأنوار الخلفية والفرامل',
+             'الصفارة (السايرن)','الفلاشر (LED)','المكيف يعمل','الراديو/الاتصال','بطارية السيارة','النظافة الداخلية','طفاية حريق سارية','مثلث تحذير + عاكس'] },
+    { id:'firstaid', name:'شنطة الإسعافات الأولية', nameEn:'First Aid Bag', barcode:'CL-BAG-01',
+      color:'#10b981', icon:'fa-briefcase-medical',
+      items:['شاش معقم بأحجام مختلفة','لاصق طبي (Plaster)','ضمادات ضاغطة','قفازات نيتريل','مقص طبي','ملقاط','مطهر (Antiseptic)',
+             'كمادات باردة','رباط ضاغط','جبيرة (Splint)','كمامة CPR','مسكنات أساسية سارية الصلاحية','محلول ملحي للعين','بطانية طوارئ'] },
+    { id:'aed', name:'جهاز AED', nameEn:'AED Device', barcode:'CL-AED-01',
+      color:'#f59e0b', icon:'fa-heart-pulse',
+      items:['البطارية شحن ≥ ٧٠٪','لصقات (Pads) للبالغين سارية','لصقات للأطفال (إن وُجدت) سارية','مؤشر الحالة أخضر','لا يوجد تلف بالجهاز',
+             'الحقيبة نظيفة ومغلقة','مقص وموس حلاقة','قناع تنفس','بطارية احتياطية متاحة','تاريخ آخر صيانة موثّق'] }
+  ];
+
+  function loadUnits(){
+    try {
+      const s = localStorage.getItem(UNITS_KEY);
+      if (s) return JSON.parse(s);
+    } catch(e){}
+    localStorage.setItem(UNITS_KEY, JSON.stringify(DEFAULT_UNITS));
+    return DEFAULT_UNITS.slice();
+  }
+  function loadRecs(){
+    try { return JSON.parse(localStorage.getItem(RECS_KEY) || '[]'); } catch(e){ return []; }
+  }
+  function saveRecs(list){ localStorage.setItem(RECS_KEY, JSON.stringify(list)); }
+
+  function fmtDate(ts){
+    const d = new Date(ts);
+    return d.toLocaleString();
+  }
+  function lastRecFor(unitId, recs){
+    return recs.filter(r=>r.unitId===unitId).sort((a,b)=>b.ts-a.ts)[0];
+  }
+  function statusOf(rec){
+    if (!rec) return {cls:'cl-status-none', label:'لم يتم الفحص', icon:'fa-circle-question'};
+    const ageDays = (Date.now() - rec.ts) / 86400000;
+    if (!rec.allPassed) return {cls:'cl-status-fail', label:'به ملاحظات', icon:'fa-triangle-exclamation'};
+    if (ageDays > STALE_DAYS) return {cls:'cl-status-stale', label:'يحتاج إعادة فحص', icon:'fa-clock'};
+    return {cls:'cl-status-ok', label:'مطابق ✓', icon:'fa-circle-check'};
+  }
+
+  function renderHub(){
+    const grid = document.getElementById('clUnitsGrid');
+    const units = loadUnits();
+    const recs = loadRecs();
+    grid.innerHTML = units.map(u=>{
+      const last = lastRecFor(u.id, recs);
+      const st = statusOf(last);
+      return `<div class="cl-unit-card" onclick="openChecklistFormForUnit('${u.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div class="cl-unit-icon" style="background:${u.color};"><i class="fas ${u.icon}"></i></div>
+          <span class="cl-unit-status ${st.cls}"><i class="fas ${st.icon}"></i> ${st.label}</span>
+        </div>
+        <div>
+          <div class="cl-unit-title">${u.name}</div>
+          <div class="cl-unit-meta">${u.nameEn}</div>
+        </div>
+        <div class="cl-unit-meta">
+          <span class="cl-barcode-chip">${u.barcode}</span>
+        </div>
+        <div class="cl-unit-meta">
+          ${ last ? `آخر فحص: ${fmtDate(last.ts)} — <b>${last.technician||'—'}</b>` : 'لم يتم فحصها بعد' }
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // ============ HUB ============
+  window.openChecklistsHub = function(){
+    document.getElementById('checklistsModal').classList.add('show');
+    renderHub();
+  };
+  window.closeChecklistsHub = function(){
+    document.getElementById('checklistsModal').classList.remove('show');
+  };
+
+  // ============ FORM ============
+  let currentUnit = null;
+  window.openChecklistFormForUnit = function(unitId){
+    const u = loadUnits().find(x=>x.id===unitId);
+    if (!u) { alert('الوحدة غير موجودة'); return; }
+    currentUnit = u;
+    document.getElementById('clFormTitle').innerHTML =
+      `<i class="fas ${u.icon}" style="color:${u.color};"></i> فحص: ${u.name}`;
+    document.getElementById('clDateTime').value = new Date().toLocaleString();
+    document.getElementById('clGeneralNotes').value = '';
+    document.getElementById('clTechName').value = localStorage.getItem('ymco_last_technician') || '';
+    const wrap = document.getElementById('clItemsWrap');
+    wrap.innerHTML = u.items.map((it,idx)=>`
+      <div class="cl-form-item" data-idx="${idx}">
+        <div class="cl-item-title">${idx+1}. ${it}</div>
+        <div class="cl-item-toggle">
+          <button type="button" class="cl-toggle-btn pass" onclick="clSetItemState(${idx},'pass')"><i class="fas fa-check"></i> سليم</button>
+          <button type="button" class="cl-toggle-btn fail" onclick="clSetItemState(${idx},'fail')"><i class="fas fa-xmark"></i> يحتاج</button>
+        </div>
+        <input type="text" class="cl-item-notes" placeholder="ملاحظة (سبب الفشل)" />
+      </div>
+    `).join('');
+    document.getElementById('checklistFormModal').classList.add('show');
+  };
+  window.closeChecklistForm = function(){
+    document.getElementById('checklistFormModal').classList.remove('show');
+    currentUnit = null;
+  };
+  window.clSetItemState = function(idx,state){
+    const row = document.querySelector(`#clItemsWrap .cl-form-item[data-idx="${idx}"]`);
+    if (!row) return;
+    row.classList.remove('pass','fail');
+    row.classList.add(state);
+    row.querySelectorAll('.cl-toggle-btn').forEach(b=>b.classList.remove('active'));
+    row.querySelector('.cl-toggle-btn.'+state).classList.add('active');
+  };
+  window.saveChecklistInspection = function(){
+    if (!currentUnit) return;
+    const tech = document.getElementById('clTechName').value.trim();
+    if (!tech){ alert('يرجى كتابة اسم الفني'); return; }
+    const rows = document.querySelectorAll('#clItemsWrap .cl-form-item');
+    const items = []; let allPassed = true; let anyChecked = false;
+    rows.forEach((row,idx)=>{
+      const passed = row.classList.contains('pass');
+      const failed = row.classList.contains('fail');
+      if (passed || failed) anyChecked = true;
+      if (!passed) allPassed = false;
+      items.push({
+        name: currentUnit.items[idx],
+        ok: passed,
+        checked: passed || failed,
+        notes: (row.querySelector('.cl-item-notes')?.value || '').trim()
+      });
+    });
+    if (!anyChecked){ alert('يرجى تحديد حالة عنصر واحد على الأقل'); return; }
+    const rec = {
+      id: 'INS-' + Date.now() + '-' + Math.random().toString(36).slice(2,7),
+      unitId: currentUnit.id,
+      unitName: currentUnit.name,
+      barcode: currentUnit.barcode,
+      technician: tech,
+      ts: Date.now(),
+      items,
+      allPassed,
+      generalNotes: document.getElementById('clGeneralNotes').value.trim()
+    };
+    const list = loadRecs(); list.unshift(rec); saveRecs(list);
+    localStorage.setItem('ymco_last_technician', tech);
+    // Play sound if available
+    try { if (typeof window.playNotificationSound === 'function') window.playNotificationSound(); } catch(e){}
+    // Toast
+    try {
+      if (typeof window.showToast === 'function') {
+        window.showToast(`تم حفظ فحص ${currentUnit.name} ${allPassed?'✓ مطابق':'⚠ به ملاحظات'}`, allPassed?'success':'warning');
+      } else {
+        alert(`تم حفظ فحص ${currentUnit.name}`);
+      }
+    } catch(e){ alert('تم الحفظ'); }
+    closeChecklistForm();
+    renderHub();
+  };
+
+  // ============ SCANNER ============
+  let scanner = null;
+  window.openChecklistScanner = function(){
+    document.getElementById('checklistScanModal').classList.add('show');
+    document.getElementById('clManualBarcode').value = '';
+    setTimeout(()=>{
+      if (!window.Html5Qrcode) return;
+      try {
+        scanner = new Html5Qrcode('clScanReader');
+        scanner.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: { width: 250, height: 150 } },
+          (decoded)=>{ handleScannedCode(decoded); },
+          ()=>{}
+        ).catch(err=>{
+          document.getElementById('clScanReader').innerHTML =
+            `<div style="padding:20px;text-align:center;color:#ef4444;">تعذّر تشغيل الكاميرا: ${err}. استخدم الإدخال اليدوي بالأسفل.</div>`;
+        });
+      } catch(e){
+        document.getElementById('clScanReader').innerHTML =
+          `<div style="padding:20px;text-align:center;color:#ef4444;">خطأ في تحميل الماسح.</div>`;
+      }
+    }, 100);
+  };
+  window.closeChecklistScanner = function(){
+    document.getElementById('checklistScanModal').classList.remove('show');
+    if (scanner){ try { scanner.stop().then(()=>scanner.clear()).catch(()=>{}); } catch(e){} scanner = null; }
+  };
+  function handleScannedCode(code){
+    const trimmed = (code||'').trim();
+    const unit = loadUnits().find(u => u.barcode.toLowerCase() === trimmed.toLowerCase());
+    if (!unit){
+      alert('باركود غير معروف: ' + trimmed);
+      return;
+    }
+    closeChecklistScanner();
+    if (!document.getElementById('checklistsModal').classList.contains('show')) openChecklistsHub();
+    openChecklistFormForUnit(unit.id);
+  }
+  window.clSubmitManualBarcode = function(){
+    const v = document.getElementById('clManualBarcode').value;
+    if (v) handleScannedCode(v);
+  };
+
+  // ============ HISTORY ============
+  window.openChecklistHistory = function(){
+    document.getElementById('checklistHistoryModal').classList.add('show');
+    const sel = document.getElementById('clHistUnit');
+    const units = loadUnits();
+    sel.innerHTML = '<option value="">كل الوحدات</option>' + units.map(u=>`<option value="${u.id}">${u.name}</option>`).join('');
+    renderChecklistHistory();
+  };
+  window.closeChecklistHistory = function(){
+    document.getElementById('checklistHistoryModal').classList.remove('show');
+  };
+  window.renderChecklistHistory = function(){
+    const uf = document.getElementById('clHistUnit').value;
+    const sf = document.getElementById('clHistStatus').value;
+    const from = document.getElementById('clHistFrom').value ? new Date(document.getElementById('clHistFrom').value).getTime() : null;
+    const to   = document.getElementById('clHistTo').value ? new Date(document.getElementById('clHistTo').value).getTime() + 86400000 : null;
+    let recs = loadRecs();
+    if (uf) recs = recs.filter(r=>r.unitId===uf);
+    if (sf==='pass') recs = recs.filter(r=>r.allPassed);
+    if (sf==='fail') recs = recs.filter(r=>!r.allPassed);
+    if (from) recs = recs.filter(r=>r.ts>=from);
+    if (to) recs = recs.filter(r=>r.ts<=to);
+    const body = document.getElementById('clHistBody');
+    if (!recs.length){ body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#94a3b8;">لا توجد سجلات مطابقة</td></tr>'; return; }
+    body.innerHTML = recs.map(r=>{
+      const fails = r.items.filter(i=>i.checked && !i.ok);
+      const st = r.allPassed ? '<span class="cl-unit-status cl-status-ok"><i class="fas fa-check"></i> مطابق</span>'
+                             : '<span class="cl-unit-status cl-status-fail"><i class="fas fa-triangle-exclamation"></i> ملاحظات</span>';
+      return `<tr>
+        <td>${r.unitName}</td>
+        <td>${fmtDate(r.ts)}</td>
+        <td>${r.technician||'—'}</td>
+        <td>${st}</td>
+        <td>${fails.length}</td>
+        <td>
+          <button class="cl-btn cl-btn-ghost" style="padding:5px 10px;font-size:0.8em;" onclick="clShowRec('${r.id}')"><i class="fas fa-eye"></i></button>
+          <button class="cl-btn cl-btn-danger" style="padding:5px 10px;font-size:0.8em;" onclick="clDeleteRec('${r.id}')"><i class="fas fa-trash"></i></button>
+        </td>
+      </tr>`;
+    }).join('');
+  };
+  window.clShowRec = function(id){
+    const r = loadRecs().find(x=>x.id===id);
+    if (!r) return;
+    const detail = r.items.map(i=>{
+      if (!i.checked) return `<li style="background:#e2e8f0;color:#475569;">${i.name} <span>لم يُحدد</span></li>`;
+      return `<li class="${i.ok?'pass':'fail'}"><span>${i.name}${i.notes?' — <em>'+i.notes+'</em>':''}</span><span>${i.ok?'✓':'✗'}</span></li>`;
+    }).join('');
+    const html = `<div style="padding:6px;">
+      <h3 style="margin:0 0 6px;">${r.unitName}</h3>
+      <div style="color:#64748b;font-size:0.9em;margin-bottom:4px;">${fmtDate(r.ts)} — الفني: <b>${r.technician}</b></div>
+      ${r.generalNotes?`<div style="margin:6px 0;padding:8px;background:#fef3c7;border-radius:6px;">ملاحظات: ${r.generalNotes}</div>`:''}
+      <ul class="cl-detail-list">${detail}</ul>
+    </div>`;
+    const w = window.open('', '_blank', 'width=700,height=800');
+    if (w){
+      w.document.write(`<html><head><meta charset="utf-8"><title>Inspection ${r.id}</title>
+        <style>body{font-family:system-ui,sans-serif;padding:20px;direction:rtl;}
+        ul{list-style:none;padding:0;} li{padding:8px 12px;margin-bottom:4px;border-radius:6px;display:flex;justify-content:space-between;}
+        li.pass{background:#d1fae5;} li.fail{background:#fee2e2;}</style></head><body>${html}</body></html>`);
+      w.document.close();
+    }
+  };
+  window.clDeleteRec = function(id){
+    if (!confirm('حذف هذا السجل؟')) return;
+    saveRecs(loadRecs().filter(r=>r.id!==id));
+    renderChecklistHistory();
+    renderHub();
+  };
+  window.clExportHistoryCSV = function(){
+    const recs = loadRecs();
+    const rows = [['ID','Unit','Barcode','Date','Technician','Status','FailedCount','GeneralNotes','FailedItems']];
+    recs.forEach(r=>{
+      const fails = r.items.filter(i=>i.checked && !i.ok).map(i=>i.name+(i.notes?` (${i.notes})`:'')).join(' | ');
+      rows.push([r.id,r.unitName,r.barcode||'',new Date(r.ts).toISOString(),r.technician||'',r.allPassed?'PASS':'FAIL',
+                 r.items.filter(i=>i.checked&&!i.ok).length, (r.generalNotes||'').replace(/[\r\n,]/g,' '), fails]);
+    });
+    const csv = rows.map(row=>row.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'checklists_'+new Date().toISOString().slice(0,10)+'.csv';
+    a.click();
+  };
+
+  // Close on backdrop click / Escape
+  ['checklistsModal','checklistFormModal','checklistHistoryModal','checklistScanModal'].forEach(id=>{
+    const el = document.getElementById(id);
+    el.addEventListener('click', e=>{ if (e.target.id===id){
+      if (id==='checklistScanModal') closeChecklistScanner();
+      else el.classList.remove('show');
+    }});
+  });
+  document.addEventListener('keydown', e=>{
+    if (e.key !== 'Escape') return;
+    if (document.getElementById('checklistScanModal').classList.contains('show')) closeChecklistScanner();
+    else if (document.getElementById('checklistFormModal').classList.contains('show')) closeChecklistForm();
+    else if (document.getElementById('checklistHistoryModal').classList.contains('show')) closeChecklistHistory();
+    else if (document.getElementById('checklistsModal').classList.contains('show')) closeChecklistsHub();
+  });
+
+  // Ensure defaults exist
+  loadUnits();
+})();
+</script>
+<!-- ================== END CHECKLISTS MODULE ================== -->
 
 </body>
 </html>
