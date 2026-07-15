@@ -24481,11 +24481,71 @@ window.toggleInjuryPrintPreview = function(){
     localStorage.setItem(UNITS_KEY, JSON.stringify(DEFAULT_UNITS));
     return JSON.parse(JSON.stringify(DEFAULT_UNITS));
   }
-  function saveUnits(list){ localStorage.setItem(UNITS_KEY, JSON.stringify(list)); }
+  function saveUnits(list){
+    localStorage.setItem(UNITS_KEY, JSON.stringify(list));
+    fbPushUnits(list);
+  }
   function loadRecs(){
     try { return JSON.parse(localStorage.getItem(RECS_KEY) || '[]'); } catch(e){ return []; }
   }
-  function saveRecs(list){ localStorage.setItem(RECS_KEY, JSON.stringify(list)); }
+  function saveRecs(list){
+    localStorage.setItem(RECS_KEY, JSON.stringify(list));
+    fbPushRecs(list);
+  }
+
+  // ============ FIREBASE SYNC ============
+  const FB_UNITS_PATH = 'checklists/units';
+  const FB_RECS_PATH  = 'checklists/inspections';
+  let fbReady = false;
+  let fbSuppress = false; // prevent write-loops on remote updates
+
+  function fbDb(){ return window.firebaseDB || null; }
+  function fbPushUnits(list){
+    if (!fbReady || fbSuppress) return;
+    try {
+      const db = fbDb(); if (!db) return;
+      window.firebaseSet(window.firebaseRef(db, FB_UNITS_PATH), list).catch(e=>console.warn('units sync',e));
+    } catch(e){ console.warn(e); }
+  }
+  function fbPushRecs(list){
+    if (!fbReady || fbSuppress) return;
+    try {
+      const db = fbDb(); if (!db) return;
+      window.firebaseSet(window.firebaseRef(db, FB_RECS_PATH), list).catch(e=>console.warn('recs sync',e));
+    } catch(e){ console.warn(e); }
+  }
+  function refreshOpenViews(){
+    if (document.getElementById('checklistsModal').classList.contains('show')) renderHub();
+    if (document.getElementById('checklistHistoryModal').classList.contains('show')) window.renderChecklistHistory();
+  }
+  function initFirebaseSync(){
+    const db = fbDb();
+    if (!db || !window.firebaseRef || !window.firebaseOnValue) return;
+    fbReady = true;
+    // Seed remote units if missing
+    window.firebaseGet(window.firebaseRef(db, FB_UNITS_PATH)).then(snap=>{
+      if (!snap.exists()) fbPushUnits(loadUnits());
+    }).catch(()=>{});
+    // Subscribe units
+    window.firebaseOnValue(window.firebaseRef(db, FB_UNITS_PATH), (snap)=>{
+      const val = snap.val();
+      if (!val) return;
+      fbSuppress = true;
+      localStorage.setItem(UNITS_KEY, JSON.stringify(val));
+      fbSuppress = false;
+      refreshOpenViews();
+    });
+    // Subscribe inspections
+    window.firebaseOnValue(window.firebaseRef(db, FB_RECS_PATH), (snap)=>{
+      const val = snap.val() || [];
+      fbSuppress = true;
+      localStorage.setItem(RECS_KEY, JSON.stringify(val));
+      fbSuppress = false;
+      refreshOpenViews();
+    });
+  }
+  if (window.firebaseDB) initFirebaseSync();
+  else window.addEventListener('firebase-ready', initFirebaseSync, { once:true });
 
   function fmtDate(ts){ return new Date(ts).toLocaleString(); }
   function lastRecFor(unitId, recs){
@@ -24648,7 +24708,12 @@ window.toggleInjuryPrintPreview = function(){
     if (scanner){ try { scanner.stop().then(()=>scanner.clear()).catch(()=>{}); } catch(e){} scanner = null; }
   };
   function handleScannedCode(code){
-    const trimmed = (code||'').trim();
+    let trimmed = (code||'').trim();
+    // Accept full URLs containing ?checklist=BARCODE
+    try {
+      const m = trimmed.match(/[?&]checklist=([^&]+)/i);
+      if (m) trimmed = decodeURIComponent(m[1]);
+    } catch(e){}
     const unit = loadUnits().find(u => u.barcode.toLowerCase() === trimmed.toLowerCase());
     if (!unit){ alert('Unknown barcode: ' + trimmed); return; }
     closeChecklistScanner();
@@ -24726,18 +24791,19 @@ window.toggleInjuryPrintPreview = function(){
     const u = loadUnits().find(x=>x.id===unitId);
     if (!u) return;
     currentQrUnit = u;
+    const qrUrl = location.origin + location.pathname + '?checklist=' + encodeURIComponent(u.barcode);
     document.getElementById('clQrTitle').textContent = u.name;
-    document.getElementById('clQrText').textContent = u.barcode;
+    document.getElementById('clQrText').textContent = qrUrl;
     const holder = document.getElementById('clQrCode');
     holder.innerHTML = '';
     try {
       if (window.QRCode){
-        new QRCode(holder, { text: u.barcode, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.H });
+        new QRCode(holder, { text: qrUrl, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.H });
       } else {
-        holder.innerHTML = `<img alt="QR" src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(u.barcode)}" />`;
+        holder.innerHTML = `<img alt="QR" src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrUrl)}" />`;
       }
     } catch(e){
-      holder.innerHTML = `<img alt="QR" src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(u.barcode)}" />`;
+      holder.innerHTML = `<img alt="QR" src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(qrUrl)}" />`;
     }
     document.getElementById('checklistQrModal').classList.add('show');
   };
@@ -24865,6 +24931,18 @@ window.toggleInjuryPrintPreview = function(){
   });
 
   loadUnits();
+
+  // Auto-open inspection form when URL has ?checklist=BARCODE
+  (function autoOpenFromUrl(){
+    try {
+      const params = new URLSearchParams(location.search);
+      const code = params.get('checklist');
+      if (!code) return;
+      const trigger = () => { try { handleScannedCode(code); } catch(e){ console.warn(e); } };
+      if (document.readyState === 'complete') setTimeout(trigger, 400);
+      else window.addEventListener('load', () => setTimeout(trigger, 400), { once:true });
+    } catch(e){}
+  })();
 })();
 </script>
 <!-- ================== END CHECKLISTS MODULE ================== -->
