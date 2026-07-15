@@ -24524,58 +24524,147 @@ window.toggleInjuryPrintPreview = function(){
   }
 
   // ============ FIREBASE SYNC ============
-  const FB_UNITS_PATH = 'checklists/units';
-  const FB_RECS_PATH  = 'checklists/inspections';
-  let fbReady = false;
+  const FB_UNITS_PATH   = 'checklists/units';
+  const FB_RECS_PATH    = 'checklists/inspections';
+  const FB_RECS_BY_ID   = 'checklists/inspections_by_id';
+  let fbReady   = false;
+  let fbStarted = false;
   let fbSuppress = false; // prevent write-loops on remote updates
+  let fbToastShown = false;
 
   function fbDb(){ return window.firebaseDB || null; }
+  function fbToast(msg, kind){
+    try { if (typeof window.showToast === 'function') window.showToast(msg, kind || 'info'); } catch(_){}
+  }
+  function fbWarn(scope, e){
+    console.warn('[checklist-sync]', scope, e);
+    if (e && (e.code === 'PERMISSION_DENIED' || /permission/i.test(String(e.message||e)))) {
+      fbToast('Checklist sync blocked by Firebase rules ('+scope+'). Please log in.', 'warning');
+    }
+  }
   function fbPushUnits(list){
     if (!fbReady || fbSuppress) return;
     try {
       const db = fbDb(); if (!db) return;
-      window.firebaseSet(window.firebaseRef(db, FB_UNITS_PATH), list).catch(e=>console.warn('units sync',e));
-    } catch(e){ console.warn(e); }
+      window.firebaseSet(window.firebaseRef(db, FB_UNITS_PATH), list)
+        .catch(e=>fbWarn('units', e));
+    } catch(e){ fbWarn('units', e); }
   }
   function fbPushRecs(list){
     if (!fbReady || fbSuppress) return;
     try {
       const db = fbDb(); if (!db) return;
-      window.firebaseSet(window.firebaseRef(db, FB_RECS_PATH), list).catch(e=>console.warn('recs sync',e));
-    } catch(e){ console.warn(e); }
+      window.firebaseSet(window.firebaseRef(db, FB_RECS_PATH), list)
+        .catch(e=>fbWarn('recs', e));
+    } catch(e){ fbWarn('recs', e); }
+  }
+  // Upsert a single inspection record so it lands atomically even under concurrent writers.
+  function fbUpsertRec(rec){
+    if (!fbReady || fbSuppress || !rec || !rec.id) return;
+    try {
+      const db = fbDb(); if (!db) return;
+      window.firebaseSet(window.firebaseRef(db, FB_RECS_BY_ID + '/' + rec.id), rec)
+        .catch(e=>fbWarn('rec-upsert', e));
+    } catch(e){ fbWarn('rec-upsert', e); }
+  }
+  // Merge remote list with local by id, most recent first, dedup on id.
+  function mergeRecs(localArr, remoteArr){
+    const map = new Map();
+    (Array.isArray(remoteArr)?remoteArr:[]).forEach(r=>{ if (r && r.id) map.set(r.id, r); });
+    (Array.isArray(localArr)?localArr:[]).forEach(r=>{
+      if (!r || !r.id) return;
+      const ex = map.get(r.id);
+      if (!ex || (r.ts||0) > (ex.ts||0)) map.set(r.id, r);
+    });
+    return Array.from(map.values()).sort((a,b)=>(b.ts||0)-(a.ts||0));
   }
   function refreshOpenViews(){
-    if (document.getElementById('checklistsModal').classList.contains('show')) renderHub();
-    if (document.getElementById('checklistHistoryModal').classList.contains('show')) window.renderChecklistHistory();
+    try { if (document.getElementById('checklistsModal')?.classList.contains('show')) renderHub(); } catch(_){}
+    try { if (document.getElementById('checklistHistoryModal')?.classList.contains('show') && typeof window.renderChecklistHistory === 'function') window.renderChecklistHistory(); } catch(_){}
   }
+  // Expose upsert so saveChecklistInspection can call it in addition to the array push.
+  window.__checklistFbUpsertRec = fbUpsertRec;
+
   function initFirebaseSync(){
+    if (fbStarted) return;
     const db = fbDb();
     if (!db || !window.firebaseRef || !window.firebaseOnValue) return;
+    fbStarted = true;
     fbReady = true;
+    if (!fbToastShown){ fbToast('Checklists cloud sync connected', 'success'); fbToastShown = true; }
+
     // Seed remote units if missing
-    window.firebaseGet(window.firebaseRef(db, FB_UNITS_PATH)).then(snap=>{
-      if (!snap.exists()) fbPushUnits(loadUnits());
-    }).catch(()=>{});
+    try {
+      window.firebaseGet(window.firebaseRef(db, FB_UNITS_PATH)).then(snap=>{
+        if (!snap || !snap.exists()) fbPushUnits(loadUnits());
+      }).catch(e=>fbWarn('units-seed', e));
+    } catch(e){ fbWarn('units-seed', e); }
+
     // Subscribe units
-    window.firebaseOnValue(window.firebaseRef(db, FB_UNITS_PATH), (snap)=>{
-      const val = snap.val();
-      if (!val) return;
-      fbSuppress = true;
-      localStorage.setItem(UNITS_KEY, JSON.stringify(val));
-      fbSuppress = false;
-      refreshOpenViews();
-    });
-    // Subscribe inspections
-    window.firebaseOnValue(window.firebaseRef(db, FB_RECS_PATH), (snap)=>{
-      const val = snap.val() || [];
-      fbSuppress = true;
-      localStorage.setItem(RECS_KEY, JSON.stringify(val));
-      fbSuppress = false;
-      refreshOpenViews();
-    });
+    try {
+      window.firebaseOnValue(window.firebaseRef(db, FB_UNITS_PATH), (snap)=>{
+        const val = snap && snap.val();
+        if (!val) return;
+        fbSuppress = true;
+        try { localStorage.setItem(UNITS_KEY, JSON.stringify(val)); } catch(_){}
+        fbSuppress = false;
+        refreshOpenViews();
+      });
+    } catch(e){ fbWarn('units-sub', e); }
+
+    // Subscribe inspections array (legacy path) — merge instead of overwrite.
+    try {
+      window.firebaseOnValue(window.firebaseRef(db, FB_RECS_PATH), (snap)=>{
+        const remote = (snap && snap.val()) || [];
+        const local  = loadRecs();
+        const merged = mergeRecs(local, remote);
+        fbSuppress = true;
+        try { localStorage.setItem(RECS_KEY, JSON.stringify(merged)); } catch(_){}
+        fbSuppress = false;
+        refreshOpenViews();
+      });
+    } catch(e){ fbWarn('recs-sub', e); }
+
+    // Subscribe per-record path — this is the reliable multi-user channel.
+    try {
+      window.firebaseOnValue(window.firebaseRef(db, FB_RECS_BY_ID), (snap)=>{
+        const obj = (snap && snap.val()) || {};
+        const remoteArr = Object.values(obj);
+        const local = loadRecs();
+        const merged = mergeRecs(local, remoteArr);
+        fbSuppress = true;
+        try { localStorage.setItem(RECS_KEY, JSON.stringify(merged)); } catch(_){}
+        fbSuppress = false;
+        // Also mirror merged array back to legacy path so old readers stay consistent.
+        try {
+          const db2 = fbDb();
+          if (db2) window.firebaseSet(window.firebaseRef(db2, FB_RECS_PATH), merged).catch(()=>{});
+        } catch(_){}
+        refreshOpenViews();
+      });
+    } catch(e){ fbWarn('recs-by-id-sub', e); }
   }
-  if (window.firebaseDB) initFirebaseSync();
-  else window.addEventListener('firebase-ready', initFirebaseSync, { once:true });
+
+  // Wait for auth so writes/reads carry a valid token (rules typically require auth != null).
+  function armSync(){
+    if (fbStarted) return;
+    try {
+      if (typeof firebase !== 'undefined' && firebase.auth) {
+        firebase.auth().onAuthStateChanged(function(user){
+          if (user) initFirebaseSync();
+        });
+        // If a user is already available synchronously, start immediately too.
+        if (firebase.auth().currentUser) initFirebaseSync();
+      } else {
+        // Fallback: no auth SDK available — try direct init.
+        initFirebaseSync();
+      }
+    } catch(e){ console.warn('[checklist-sync] arm failed', e); }
+  }
+  if (window.firebaseDB) armSync();
+  else window.addEventListener('firebase-ready', armSync, { once:true });
+  // Extra safety: retry once after 3s in case firebase-ready dispatched before this listener registered.
+  setTimeout(armSync, 3000);
 
   function fmtDate(ts){ return new Date(ts).toLocaleString(); }
   function lastRecFor(unitId, recs){
@@ -24708,6 +24797,7 @@ window.toggleInjuryPrintPreview = function(){
       generalNotes: document.getElementById('clGeneralNotes').value.trim()
     };
     const list = loadRecs(); list.unshift(rec); saveRecs(list);
+    try { if (typeof window.__checklistFbUpsertRec === 'function') window.__checklistFbUpsertRec(rec); } catch(_){}
     localStorage.setItem('ymco_last_technician', tech);
     try { if (typeof window.playNotificationSound === 'function') window.playNotificationSound(); } catch(e){}
     try {
