@@ -6879,7 +6879,6 @@ window.YMCO_showSplash = function(){
             <button class="nav-btn active" id="navDashboard" onclick="showDashboard()"><i class="fas fa-chart-pie"></i> Dashboard</button>
             <button class="nav-btn" id="navWorkers" onclick="showWorkers()"><i class="fas fa-users"></i> Workers</button>
             <button class="nav-btn" id="navNewWorker" onclick="openAddWorkerModal()"><i class="fas fa-plus" style="color:#10b981;"></i> New Worker</button>
-            <button class="nav-btn" id="navChecklists" onclick="openChecklistsHub()"><i class="fas fa-clipboard-check" style="color:#f59e0b;"></i> Checklists</button>
         </div>
         <div class="notif-bell-wrap" id="notifBellWrap">
             <button class="notif-bell" id="notifBell" title="Notifications" onclick="toggleNotifPanel(event)" aria-label="Notifications">
@@ -7238,6 +7237,13 @@ window.YMCO_showSplash = function(){
                     background:linear-gradient(135deg,#ea580c,#b91c1c);
                     box-shadow:0 3px 10px rgba(234,88,12,.28);}
                 .qa-btn.qa-warn:hover{background:linear-gradient(135deg,#f97316,#c2410c);box-shadow:0 6px 16px rgba(234,88,12,.4);}
+                .qa-group.active{position:relative;}
+                .qa-group.active::before{content:'';position:absolute;inset:-8px -12px;border-radius:14px;border:2px solid rgba(59,130,246,.45);background:rgba(59,130,246,.06);pointer-events:none;z-index:0;}
+                .qa-group.active .qa-group-label{position:relative;z-index:1;color:#2563eb;opacity:1;}
+                .qa-group.active .qa-group-label i{position:relative;z-index:1;color:#2563eb;}
+                .dark-mode .qa-group.active::before,body.dark .qa-group.active::before{border-color:rgba(96,165,250,.55);background:rgba(96,165,250,.09);}
+                .dark-mode .qa-group.active .qa-group-label,body.dark .qa-group.active .qa-group-label{color:#60a5fa;}
+                .dark-mode .qa-group.active .qa-group-label i,body.dark .qa-group.active .qa-group-label i{color:#60a5fa;}
                 @media(max-width:900px){
                     .qa-group + .qa-group{border-inline-start:none;padding-inline-start:0;
                         border-top:1px solid rgba(148,163,184,0.22);padding-top:12px;}
@@ -7262,7 +7268,7 @@ window.YMCO_showSplash = function(){
                         <button class="qa-btn i-blue" onclick="openMonthlyInjuryReport()" title="Generate monthly injury report (PDF)"><i class="fas fa-file-medical-alt"></i> Monthly Injury Report</button>
                     </div>
                 </div>
-                <div class="qa-group">
+                <div class="qa-group" id="qaGroupEmergency">
                     <span class="qa-group-label"><i class="fas fa-triangle-exclamation"></i> Emergency</span>
                     <div class="qa-group-row">
                         <button class="qa-btn qa-warn" onclick="openEmergencyQRModal()" title="Generate Smart Emergency QR for a worker"><i class="fas fa-ambulance"></i> Smart Emergency QR</button>
@@ -7270,7 +7276,7 @@ window.YMCO_showSplash = function(){
                         <button class="qa-btn perm-medical_emergency_qr i-blue" onclick="openAlertsHistory()" title="Emergency Alerts History — سجل بلاغات الطوارئ الطبية"><i class="fas fa-clipboard-list"></i> Alerts History</button>
                     </div>
                 </div>
-                <div class="qa-group">
+                <div class="qa-group" id="qaGroupChecklists">
                     <span class="qa-group-label"><i class="fas fa-clipboard-check"></i> Checklists</span>
                     <div class="qa-group-row">
                         <button class="qa-btn i-amber" onclick="openChecklistsHub()" title="Open Checklists Hub"><i class="fas fa-clipboard-check"></i> Open Checklists Hub</button>
@@ -20756,6 +20762,17 @@ window.toggleInjuryPrintPreview = function(){
 (function(){
   let _eqrCurrentWorkerId = null;
 
+  window.setEmergencyGroupActive = function(active){
+    const g = document.getElementById('qaGroupEmergency');
+    if(g) g.classList.toggle('active', !!active);
+  };
+  window.updateEmergencyGroupActive = function(){
+    const anyOpen = document.getElementById('emergencyQRModal')?.classList.contains('active') ||
+                    document.getElementById('medEmgModal')?.classList.contains('show') ||
+                    document.getElementById('alertsHistoryModal')?.classList.contains('show');
+    window.setEmergencyGroupActive(anyOpen);
+  };
+
   window.openEmergencyQRModal = function(){
     const m = document.getElementById('emergencyQRModal');
     m.classList.add('active'); m.style.display='flex';
@@ -20763,10 +20780,12 @@ window.toggleInjuryPrintPreview = function(){
     document.getElementById('eqrPanel').style.display='none';
     _eqrCurrentWorkerId = null;
     renderEqrWorkerList();
+    window.updateEmergencyGroupActive();
   };
   window.closeEmergencyQRModal = function(){
     const m = document.getElementById('emergencyQRModal');
     m.classList.remove('active'); m.style.display='none';
+    window.updateEmergencyGroupActive();
   };
 
   function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -22793,9 +22812,11 @@ window.toggleInjuryPrintPreview = function(){
     if (!FIREBASE_READY) document.getElementById('medEmgConfigWarn').style.display = 'block';
     // pre-generate
     setTimeout(medEmgGenerateQR, 100);
+    window.updateEmergencyGroupActive();
   };
   window.closeMedicalEmergencyQRModal = function(){
     document.getElementById('medEmgModal').classList.remove('show');
+    window.updateEmergencyGroupActive();
   };
 
   function medEmgBuildUrl(){
@@ -23881,9 +23902,11 @@ window.toggleInjuryPrintPreview = function(){
     m.classList.add('show');
     attachListener();
     aehLoadAlerts();
+    window.updateEmergencyGroupActive();
   };
   window.closeAlertsHistory = function(){
     document.getElementById('alertsHistoryModal').classList.remove('show');
+    window.updateEmergencyGroupActive();
   };
 
   function readLocal(){
@@ -24598,12 +24621,24 @@ window.toggleInjuryPrintPreview = function(){
   }
 
   // ============ HUB ============
+  window.setChecklistsGroupActive = function(active){
+    const g = document.getElementById('qaGroupChecklists');
+    if(g) g.classList.toggle('active', !!active);
+  };
+  window.updateChecklistsGroupActive = function(){
+    const anyOpen = document.getElementById('checklistsModal')?.classList.contains('show') ||
+                    document.getElementById('checklistScanModal')?.classList.contains('show');
+    window.setChecklistsGroupActive(anyOpen);
+  };
+
   window.openChecklistsHub = function(){
     document.getElementById('checklistsModal').classList.add('show');
     renderHub();
+    window.updateChecklistsGroupActive();
   };
   window.closeChecklistsHub = function(){
     document.getElementById('checklistsModal').classList.remove('show');
+    window.updateChecklistsGroupActive();
   };
 
   // ============ FORM ============
@@ -24691,6 +24726,7 @@ window.toggleInjuryPrintPreview = function(){
   window.openChecklistScanner = function(){
     document.getElementById('checklistScanModal').classList.add('show');
     document.getElementById('clManualBarcode').value = '';
+    window.updateChecklistsGroupActive();
     setTimeout(()=>{
       if (!window.Html5Qrcode) return;
       try {
@@ -24712,6 +24748,7 @@ window.toggleInjuryPrintPreview = function(){
   };
   window.closeChecklistScanner = function(){
     document.getElementById('checklistScanModal').classList.remove('show');
+    window.updateChecklistsGroupActive();
     if (scanner){ try { scanner.stop().then(()=>scanner.clear()).catch(()=>{}); } catch(e){} scanner = null; }
   };
   function handleScannedCode(code){
