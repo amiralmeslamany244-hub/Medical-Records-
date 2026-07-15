@@ -24177,17 +24177,20 @@ window.toggleInjuryPrintPreview = function(){
 </script>
 <!-- ================== END EMERGENCY ALERTS HISTORY MODULE ================== -->
 
-<!-- ================== CHECKLISTS MODULE (Clinic / Ambulance / First-Aid Bag / AED) ================== -->
+<!-- ================== CHECKLISTS MODULE (Clinic / Ambulance / First-Aid Bag / AED / Oxygen) ================== -->
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <style>
-  #checklistsModal, #checklistFormModal, #checklistHistoryModal, #checklistScanModal {
+  #checklistsModal, #checklistFormModal, #checklistHistoryModal, #checklistScanModal, #checklistManageModal, #checklistQrModal {
     position: fixed; inset: 0; background: rgba(15,23,42,.72); z-index: 10000;
     display: none; align-items: flex-start; justify-content: center; padding: 24px 12px; overflow-y: auto;
+    direction: ltr;
   }
-  #checklistsModal.show, #checklistFormModal.show, #checklistHistoryModal.show, #checklistScanModal.show { display: flex; }
+  #checklistsModal.show, #checklistFormModal.show, #checklistHistoryModal.show, #checklistScanModal.show, #checklistManageModal.show, #checklistQrModal.show { display: flex; }
   .cl-panel {
     background: #fff; color: #1e293b; width: 100%; max-width: 1100px; border-radius: 18px;
     box-shadow: 0 25px 60px rgba(0,0,0,.35); padding: 22px 24px; position: relative; margin-bottom: 40px;
+    text-align: left;
   }
   body.dark-mode .cl-panel { background: #0f172a; color: #e2e8f0; }
   .cl-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
@@ -24205,10 +24208,11 @@ window.toggleInjuryPrintPreview = function(){
   body.dark-mode .cl-btn-ghost { background: #334155; color: #e2e8f0; }
   .cl-btn-danger { background: #ef4444; color: #fff; }
   .cl-btn-ok     { background: linear-gradient(135deg,#10b981,#059669); color: #fff; }
-  .cl-units-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr)); gap: 14px; }
+  .cl-btn-purple { background: linear-gradient(135deg,#8b5cf6,#7c3aed); color: #fff; }
+  .cl-units-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); gap: 14px; }
   .cl-unit-card {
     border: 2px solid #e2e8f0; border-radius: 14px; padding: 16px; background: #f8fafc;
-    display: flex; flex-direction: column; gap: 10px; cursor: pointer; transition: all .15s;
+    display: flex; flex-direction: column; gap: 10px; transition: all .15s;
   }
   body.dark-mode .cl-unit-card { background: #1e293b; border-color: #334155; }
   .cl-unit-card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0,0,0,.12); border-color: #3b82f6; }
@@ -24223,6 +24227,8 @@ window.toggleInjuryPrintPreview = function(){
   .cl-status-stale { background: #fef3c7; color: #92400e; }
   .cl-barcode-chip { font-family: monospace; font-size: 0.78em; padding: 2px 8px; border-radius: 6px; background: #e0e7ff; color: #3730a3; }
   body.dark-mode .cl-barcode-chip { background: #312e81; color: #c7d2fe; }
+  .cl-card-buttons { display:flex; gap:6px; flex-wrap:wrap; margin-top: 6px; }
+  .cl-card-buttons .cl-btn { padding: 6px 10px; font-size: 0.78em; }
 
   .cl-form-item {
     display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 10px 12px; margin-bottom: 8px;
@@ -24251,7 +24257,7 @@ window.toggleInjuryPrintPreview = function(){
   .cl-scan-hint { text-align: center; margin: 12px 0; color: #64748b; font-size: 0.9em; }
 
   .cl-history-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9em; }
-  .cl-history-table th, .cl-history-table td { padding: 10px 8px; text-align: right; border-bottom: 1px solid #e2e8f0; }
+  .cl-history-table th, .cl-history-table td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #e2e8f0; }
   body.dark-mode .cl-history-table th, body.dark-mode .cl-history-table td { border-color: #334155; }
   .cl-history-table th { background: #f1f5f9; font-size: 0.85em; }
   body.dark-mode .cl-history-table th { background: #1e293b; }
@@ -24263,13 +24269,31 @@ window.toggleInjuryPrintPreview = function(){
   .cl-detail-list li { padding: 8px 12px; border-radius: 8px; margin-bottom: 4px; display: flex; justify-content: space-between; gap: 10px; }
   .cl-detail-list li.pass { background: #d1fae5; color: #065f46; }
   .cl-detail-list li.fail { background: #fee2e2; color: #991b1b; }
+
+  /* Manage items */
+  .cl-manage-item { display:flex; gap:8px; align-items:center; padding:8px; background:#f1f5f9; border-radius:8px; margin-bottom:6px; }
+  body.dark-mode .cl-manage-item { background:#1e293b; }
+  .cl-manage-item input { flex:1; padding:8px 10px; border:1px solid #cbd5e0; border-radius:6px; background:#fff; color:#1e293b; }
+  body.dark-mode .cl-manage-item input { background:#0f172a; color:#e2e8f0; border-color:#334155; }
+
+  /* QR print */
+  .cl-qr-card { border:2px dashed #94a3b8; border-radius:12px; padding:20px; text-align:center; background:#fff; color:#1e293b; }
+  .cl-qr-card h3 { margin:0 0 8px; }
+  .cl-qr-card .cl-qr-code { display:inline-block; margin:12px 0; padding:10px; background:#fff; border-radius:8px; }
+  .cl-qr-card .cl-qr-code img, .cl-qr-card .cl-qr-code canvas { display:block; }
+  @media print {
+    body * { visibility: hidden !important; }
+    #cl-print-area, #cl-print-area * { visibility: visible !important; }
+    #cl-print-area { position: absolute; left: 0; top: 0; width:100%; }
+    .cl-no-print { display:none !important; }
+  }
 </style>
 
 <!-- Hub modal -->
 <div id="checklistsModal" role="dialog" aria-label="Checklists">
   <div class="cl-panel">
     <div class="cl-head">
-      <h2><i class="fas fa-clipboard-check"></i> Equipment Checklists — قوائم الفحص</h2>
+      <h2><i class="fas fa-clipboard-check"></i> Equipment Checklists</h2>
       <div class="cl-actions">
         <button class="cl-btn cl-btn-scan" onclick="openChecklistScanner()"><i class="fas fa-qrcode"></i> Scan Barcode</button>
         <button class="cl-btn cl-btn-primary" onclick="openChecklistHistory()"><i class="fas fa-history"></i> History</button>
@@ -24277,7 +24301,7 @@ window.toggleInjuryPrintPreview = function(){
       </div>
     </div>
     <p style="margin:0 0 14px;color:#64748b;font-size:0.9em;">
-      اختر وحدة لبدء الفحص، أو امسح باركود الوحدة بالكاميرا. النتائج تُحفظ وتظهر أدناه.
+      Scan a unit's barcode with the camera, or open a checklist manually. Use the buttons on each card to manage items or print the QR barcode.
     </p>
     <div id="clUnitsGrid" class="cl-units-grid"></div>
   </div>
@@ -24287,14 +24311,14 @@ window.toggleInjuryPrintPreview = function(){
 <div id="checklistScanModal" role="dialog" aria-label="Scan Barcode">
   <div class="cl-panel" style="max-width:560px;">
     <div class="cl-head">
-      <h2><i class="fas fa-qrcode"></i> مسح الباركود</h2>
+      <h2><i class="fas fa-qrcode"></i> Scan Barcode</h2>
       <button class="cl-close" onclick="closeChecklistScanner()" aria-label="Close"><i class="fas fa-times"></i></button>
     </div>
     <div id="clScanReader"></div>
-    <div class="cl-scan-hint">وجّه الكاميرا نحو باركود الوحدة (سيارة/عيادة/شنطة/AED)</div>
+    <div class="cl-scan-hint">Point the camera at the unit barcode (Clinic / Ambulance / Bag / AED / Oxygen)</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-      <input id="clManualBarcode" type="text" placeholder="أو أدخل الكود يدوياً" style="flex:1;min-width:180px;padding:9px 12px;border:1px solid #cbd5e0;border-radius:8px;" />
-      <button class="cl-btn cl-btn-primary" onclick="clSubmitManualBarcode()">فتح الفحص</button>
+      <input id="clManualBarcode" type="text" placeholder="Or enter code manually" style="flex:1;min-width:180px;padding:9px 12px;border:1px solid #cbd5e0;border-radius:8px;" />
+      <button class="cl-btn cl-btn-primary" onclick="clSubmitManualBarcode()">Open Checklist</button>
     </div>
   </div>
 </div>
@@ -24308,8 +24332,8 @@ window.toggleInjuryPrintPreview = function(){
     </div>
     <div class="cl-form-row">
       <div>
-        <label>Technician (اسم الفني)</label>
-        <input id="clTechName" type="text" placeholder="اكتب اسمك" />
+        <label>Technician Name</label>
+        <input id="clTechName" type="text" placeholder="Enter your name" />
       </div>
       <div>
         <label>Date / Time</label>
@@ -24318,12 +24342,54 @@ window.toggleInjuryPrintPreview = function(){
     </div>
     <div id="clItemsWrap"></div>
     <div style="margin-top:14px;">
-      <label style="font-size:0.85em;font-weight:600;">ملاحظات عامة</label>
+      <label style="font-size:0.85em;font-weight:600;">General Notes</label>
       <textarea id="clGeneralNotes" rows="2" style="width:100%;padding:9px 12px;border:1px solid #cbd5e0;border-radius:8px;"></textarea>
     </div>
     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap;">
-      <button class="cl-btn cl-btn-ghost" onclick="closeChecklistForm()">إلغاء</button>
-      <button class="cl-btn cl-btn-ok" onclick="saveChecklistInspection()"><i class="fas fa-save"></i> حفظ الفحص</button>
+      <button class="cl-btn cl-btn-ghost" onclick="closeChecklistForm()">Cancel</button>
+      <button class="cl-btn cl-btn-ok" onclick="saveChecklistInspection()"><i class="fas fa-save"></i> Save Inspection</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manage items modal -->
+<div id="checklistManageModal" role="dialog" aria-label="Manage Checklist Items">
+  <div class="cl-panel" style="max-width:720px;">
+    <div class="cl-head">
+      <h2 id="clManageTitle"><i class="fas fa-pen-to-square"></i> Manage Items</h2>
+      <button class="cl-close" onclick="closeChecklistManage()" aria-label="Close"><i class="fas fa-times"></i></button>
+    </div>
+    <p style="margin:0 0 10px;color:#64748b;font-size:0.88em;">Add, edit, or remove items in this checklist. Changes apply to future inspections only.</p>
+    <div id="clManageList"></div>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <input id="clNewItemInput" type="text" placeholder="New item name" style="flex:1;padding:9px 12px;border:1px solid #cbd5e0;border-radius:8px;" />
+      <button class="cl-btn cl-btn-primary" onclick="clAddNewItem()"><i class="fas fa-plus"></i> Add</button>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap;">
+      <button class="cl-btn cl-btn-ghost" onclick="closeChecklistManage()">Cancel</button>
+      <button class="cl-btn cl-btn-ok" onclick="saveChecklistManage()"><i class="fas fa-save"></i> Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- QR Barcode modal -->
+<div id="checklistQrModal" role="dialog" aria-label="Checklist Barcode">
+  <div class="cl-panel" style="max-width:520px;">
+    <div class="cl-head cl-no-print">
+      <h2><i class="fas fa-qrcode"></i> Checklist Barcode</h2>
+      <div class="cl-actions">
+        <button class="cl-btn cl-btn-primary" onclick="clPrintQr()"><i class="fas fa-print"></i> Print</button>
+        <button class="cl-btn cl-btn-ghost" onclick="clDownloadQr()"><i class="fas fa-download"></i> Download PNG</button>
+        <button class="cl-close" onclick="closeChecklistQr()" aria-label="Close"><i class="fas fa-times"></i></button>
+      </div>
+    </div>
+    <div id="cl-print-area">
+      <div class="cl-qr-card">
+        <h3 id="clQrTitle">Unit</h3>
+        <div id="clQrCode" class="cl-qr-code"></div>
+        <div style="font-family:monospace;font-size:1.05em;font-weight:700;letter-spacing:2px;" id="clQrText">CODE</div>
+        <div style="margin-top:10px;font-size:0.85em;color:#475569;">Scan this barcode daily to log the inspection.</div>
+      </div>
     </div>
   </div>
 </div>
@@ -24332,27 +24398,27 @@ window.toggleInjuryPrintPreview = function(){
 <div id="checklistHistoryModal" role="dialog" aria-label="Checklist History">
   <div class="cl-panel">
     <div class="cl-head">
-      <h2><i class="fas fa-history"></i> سجل الفحوصات</h2>
+      <h2><i class="fas fa-history"></i> Inspection History</h2>
       <div class="cl-actions">
-        <button class="cl-btn cl-btn-primary" onclick="clExportHistoryCSV()"><i class="fas fa-file-csv"></i> تصدير CSV</button>
+        <button class="cl-btn cl-btn-primary" onclick="clExportHistoryCSV()"><i class="fas fa-file-csv"></i> Export CSV</button>
         <button class="cl-close" onclick="closeChecklistHistory()" aria-label="Close"><i class="fas fa-times"></i></button>
       </div>
     </div>
     <div class="cl-history-filters">
-      <select id="clHistUnit"><option value="">كل الوحدات</option></select>
+      <select id="clHistUnit"><option value="">All units</option></select>
       <select id="clHistStatus">
-        <option value="">كل الحالات</option>
-        <option value="pass">مطابق</option>
-        <option value="fail">به ملاحظات</option>
+        <option value="">All statuses</option>
+        <option value="pass">Pass</option>
+        <option value="fail">Has issues</option>
       </select>
       <input id="clHistFrom" type="date" />
       <input id="clHistTo" type="date" />
-      <button class="cl-btn cl-btn-ghost" onclick="renderChecklistHistory()">تحديث</button>
+      <button class="cl-btn cl-btn-ghost" onclick="renderChecklistHistory()">Refresh</button>
     </div>
     <div style="overflow-x:auto;">
       <table class="cl-history-table" id="clHistTable">
         <thead><tr>
-          <th>الوحدة</th><th>التاريخ</th><th>الفني</th><th>الحالة</th><th>عناصر فاشلة</th><th>تفاصيل</th>
+          <th>Unit</th><th>Date</th><th>Technician</th><th>Status</th><th>Failed</th><th>Actions</th>
         </tr></thead>
         <tbody id="clHistBody"></tbody>
       </table>
@@ -24362,55 +24428,75 @@ window.toggleInjuryPrintPreview = function(){
 
 <script>
 (function(){
-  const UNITS_KEY = 'ymco_checklist_units_v1';
+  const UNITS_KEY = 'ymco_checklist_units_v2';
   const RECS_KEY  = 'ymco_checklist_inspections_v1';
   const STALE_DAYS = 7;
 
   const DEFAULT_UNITS = [
-    { id:'clinic', name:'أدوات العيادة', nameEn:'Clinic Instruments', barcode:'CL-CLINIC-01',
+    { id:'clinic', name:'Clinic Instruments', barcode:'CL-CLINIC-01',
       color:'#06b6d4', icon:'fa-stethoscope',
-      items:['سماعة الطبيب','جهاز قياس ضغط','ميزان حرارة','جهاز قياس السكر','جهاز نبضات القلب (Pulse Oximeter)',
-             'شاش وضمادات','مطهرات (بيتادين/كحول)','قفازات طبية','كمامات','سرير الفحص نظيف','إضاءة الغرفة تعمل','خزانة أدوية مرتبة'] },
-    { id:'ambulance', name:'سيارة الإسعاف', nameEn:'Ambulance Vehicle', barcode:'CL-AMB-01',
+      items:['Stethoscope','Blood pressure monitor','Thermometer','Glucometer','Pulse oximeter',
+             'Gauze and bandages','Antiseptics (Betadine/Alcohol)','Medical gloves','Face masks',
+             'Examination bed clean','Room lighting works','Medicine cabinet organized'] },
+    { id:'clinic_o2', name:'Clinic Oxygen Cylinder', barcode:'CL-O2-CLINIC-01',
+      color:'#0ea5e9', icon:'fa-lungs',
+      items:['Cylinder pressure ≥ 1000 psi','Regulator attached and undamaged','Flow meter operational',
+             'Oxygen mask available and sealed','Nasal cannula available','Humidifier bottle filled',
+             'Cylinder secured (chain/stand)','Hydrostatic test date valid','No leaks detected','Warning labels visible'] },
+    { id:'ambulance', name:'Ambulance Vehicle', barcode:'CL-AMB-01',
       color:'#ef4444', icon:'fa-truck-medical',
-      items:['البنزين/الديزل ممتلئ','زيت المحرك','ماء الرادياتير','ضغط الإطارات (٤ إطارات + احتياطي)','الأنوار الأمامية','الأنوار الخلفية والفرامل',
-             'الصفارة (السايرن)','الفلاشر (LED)','المكيف يعمل','الراديو/الاتصال','بطارية السيارة','النظافة الداخلية','طفاية حريق سارية','مثلث تحذير + عاكس'] },
-    { id:'firstaid', name:'شنطة الإسعافات الأولية', nameEn:'First Aid Bag', barcode:'CL-BAG-01',
+      items:['Fuel tank full','Engine oil level','Radiator coolant','Tire pressure (4 + spare)','Headlights',
+             'Tail lights and brake lights','Siren','LED flashers','Air conditioning works','Radio/communication',
+             'Vehicle battery','Interior cleanliness','Fire extinguisher valid','Warning triangle + reflector'] },
+    { id:'ambulance_o2', name:'Ambulance Oxygen Cylinder', barcode:'CL-O2-AMB-01',
+      color:'#0284c7', icon:'fa-lungs',
+      items:['Main cylinder pressure ≥ 1000 psi','Backup cylinder available and full','Regulator attached and undamaged',
+             'Flow meter operational','Oxygen masks (adult + pediatric)','Nasal cannula','Non-rebreather mask',
+             'BVM (Bag Valve Mask) connected','Cylinder secured in bracket','Hydrostatic test date valid','No leaks detected'] },
+    { id:'firstaid', name:'First Aid Bag', barcode:'CL-BAG-01',
       color:'#10b981', icon:'fa-briefcase-medical',
-      items:['شاش معقم بأحجام مختلفة','لاصق طبي (Plaster)','ضمادات ضاغطة','قفازات نيتريل','مقص طبي','ملقاط','مطهر (Antiseptic)',
-             'كمادات باردة','رباط ضاغط','جبيرة (Splint)','كمامة CPR','مسكنات أساسية سارية الصلاحية','محلول ملحي للعين','بطانية طوارئ'] },
-    { id:'aed', name:'جهاز AED', nameEn:'AED Device', barcode:'CL-AED-01',
+      items:['Sterile gauze various sizes','Medical plaster','Pressure bandages','Nitrile gloves','Medical scissors',
+             'Tweezers','Antiseptic','Cold packs','Elastic bandage','Splint','CPR mask','Basic painkillers (in date)',
+             'Saline eye wash','Emergency blanket'] },
+    { id:'aed', name:'AED Device', barcode:'CL-AED-01',
       color:'#f59e0b', icon:'fa-heart-pulse',
-      items:['البطارية شحن ≥ ٧٠٪','لصقات (Pads) للبالغين سارية','لصقات للأطفال (إن وُجدت) سارية','مؤشر الحالة أخضر','لا يوجد تلف بالجهاز',
-             'الحقيبة نظيفة ومغلقة','مقص وموس حلاقة','قناع تنفس','بطارية احتياطية متاحة','تاريخ آخر صيانة موثّق'] }
+      items:['Battery charge ≥ 70%','Adult pads (in date)','Pediatric pads (if present, in date)','Status indicator green',
+             'No visible damage','Case clean and closed','Scissors and razor included','Rescue breath mask',
+             'Spare battery available','Last service date documented'] }
   ];
 
   function loadUnits(){
     try {
       const s = localStorage.getItem(UNITS_KEY);
-      if (s) return JSON.parse(s);
+      if (s) {
+        const arr = JSON.parse(s);
+        // Merge in any new default units not yet present (upgrade path)
+        const ids = new Set(arr.map(u=>u.id));
+        let changed = false;
+        DEFAULT_UNITS.forEach(du=>{ if (!ids.has(du.id)){ arr.push(JSON.parse(JSON.stringify(du))); changed = true; } });
+        if (changed) localStorage.setItem(UNITS_KEY, JSON.stringify(arr));
+        return arr;
+      }
     } catch(e){}
     localStorage.setItem(UNITS_KEY, JSON.stringify(DEFAULT_UNITS));
-    return DEFAULT_UNITS.slice();
+    return JSON.parse(JSON.stringify(DEFAULT_UNITS));
   }
+  function saveUnits(list){ localStorage.setItem(UNITS_KEY, JSON.stringify(list)); }
   function loadRecs(){
     try { return JSON.parse(localStorage.getItem(RECS_KEY) || '[]'); } catch(e){ return []; }
   }
   function saveRecs(list){ localStorage.setItem(RECS_KEY, JSON.stringify(list)); }
 
-  function fmtDate(ts){
-    const d = new Date(ts);
-    return d.toLocaleString();
-  }
+  function fmtDate(ts){ return new Date(ts).toLocaleString(); }
   function lastRecFor(unitId, recs){
     return recs.filter(r=>r.unitId===unitId).sort((a,b)=>b.ts-a.ts)[0];
   }
   function statusOf(rec){
-    if (!rec) return {cls:'cl-status-none', label:'لم يتم الفحص', icon:'fa-circle-question'};
+    if (!rec) return {cls:'cl-status-none', label:'Not inspected', icon:'fa-circle-question'};
     const ageDays = (Date.now() - rec.ts) / 86400000;
-    if (!rec.allPassed) return {cls:'cl-status-fail', label:'به ملاحظات', icon:'fa-triangle-exclamation'};
-    if (ageDays > STALE_DAYS) return {cls:'cl-status-stale', label:'يحتاج إعادة فحص', icon:'fa-clock'};
-    return {cls:'cl-status-ok', label:'مطابق ✓', icon:'fa-circle-check'};
+    if (!rec.allPassed) return {cls:'cl-status-fail', label:'Has issues', icon:'fa-triangle-exclamation'};
+    if (ageDays > STALE_DAYS) return {cls:'cl-status-stale', label:'Re-inspection due', icon:'fa-clock'};
+    return {cls:'cl-status-ok', label:'Pass', icon:'fa-circle-check'};
   }
 
   function renderHub(){
@@ -24420,20 +24506,25 @@ window.toggleInjuryPrintPreview = function(){
     grid.innerHTML = units.map(u=>{
       const last = lastRecFor(u.id, recs);
       const st = statusOf(last);
-      return `<div class="cl-unit-card" onclick="openChecklistFormForUnit('${u.id}')">
+      return `<div class="cl-unit-card">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <div class="cl-unit-icon" style="background:${u.color};"><i class="fas ${u.icon}"></i></div>
           <span class="cl-unit-status ${st.cls}"><i class="fas ${st.icon}"></i> ${st.label}</span>
         </div>
         <div>
           <div class="cl-unit-title">${u.name}</div>
-          <div class="cl-unit-meta">${u.nameEn}</div>
+          <div class="cl-unit-meta">${u.items.length} items</div>
         </div>
         <div class="cl-unit-meta">
           <span class="cl-barcode-chip">${u.barcode}</span>
         </div>
         <div class="cl-unit-meta">
-          ${ last ? `آخر فحص: ${fmtDate(last.ts)} — <b>${last.technician||'—'}</b>` : 'لم يتم فحصها بعد' }
+          ${ last ? `Last: ${fmtDate(last.ts)} — <b>${last.technician||'—'}</b>` : 'Not inspected yet' }
+        </div>
+        <div class="cl-card-buttons">
+          <button class="cl-btn cl-btn-ok" onclick="openChecklistFormForUnit('${u.id}')"><i class="fas fa-clipboard-check"></i> Inspect</button>
+          <button class="cl-btn cl-btn-purple" onclick="openChecklistQr('${u.id}')"><i class="fas fa-qrcode"></i> Barcode</button>
+          <button class="cl-btn cl-btn-ghost" onclick="openChecklistManage('${u.id}')"><i class="fas fa-pen"></i> Edit items</button>
         </div>
       </div>`;
     }).join('');
@@ -24452,10 +24543,10 @@ window.toggleInjuryPrintPreview = function(){
   let currentUnit = null;
   window.openChecklistFormForUnit = function(unitId){
     const u = loadUnits().find(x=>x.id===unitId);
-    if (!u) { alert('الوحدة غير موجودة'); return; }
+    if (!u) { alert('Unit not found'); return; }
     currentUnit = u;
     document.getElementById('clFormTitle').innerHTML =
-      `<i class="fas ${u.icon}" style="color:${u.color};"></i> فحص: ${u.name}`;
+      `<i class="fas ${u.icon}" style="color:${u.color};"></i> Inspect: ${u.name}`;
     document.getElementById('clDateTime').value = new Date().toLocaleString();
     document.getElementById('clGeneralNotes').value = '';
     document.getElementById('clTechName').value = localStorage.getItem('ymco_last_technician') || '';
@@ -24464,10 +24555,10 @@ window.toggleInjuryPrintPreview = function(){
       <div class="cl-form-item" data-idx="${idx}">
         <div class="cl-item-title">${idx+1}. ${it}</div>
         <div class="cl-item-toggle">
-          <button type="button" class="cl-toggle-btn pass" onclick="clSetItemState(${idx},'pass')"><i class="fas fa-check"></i> سليم</button>
-          <button type="button" class="cl-toggle-btn fail" onclick="clSetItemState(${idx},'fail')"><i class="fas fa-xmark"></i> يحتاج</button>
+          <button type="button" class="cl-toggle-btn pass" onclick="clSetItemState(${idx},'pass')"><i class="fas fa-check"></i> Pass</button>
+          <button type="button" class="cl-toggle-btn fail" onclick="clSetItemState(${idx},'fail')"><i class="fas fa-xmark"></i> Fail</button>
         </div>
-        <input type="text" class="cl-item-notes" placeholder="ملاحظة (سبب الفشل)" />
+        <input type="text" class="cl-item-notes" placeholder="Note (reason for failure)" />
       </div>
     `).join('');
     document.getElementById('checklistFormModal').classList.add('show');
@@ -24487,7 +24578,7 @@ window.toggleInjuryPrintPreview = function(){
   window.saveChecklistInspection = function(){
     if (!currentUnit) return;
     const tech = document.getElementById('clTechName').value.trim();
-    if (!tech){ alert('يرجى كتابة اسم الفني'); return; }
+    if (!tech){ alert('Please enter the technician name'); return; }
     const rows = document.querySelectorAll('#clItemsWrap .cl-form-item');
     const items = []; let allPassed = true; let anyChecked = false;
     rows.forEach((row,idx)=>{
@@ -24502,7 +24593,7 @@ window.toggleInjuryPrintPreview = function(){
         notes: (row.querySelector('.cl-item-notes')?.value || '').trim()
       });
     });
-    if (!anyChecked){ alert('يرجى تحديد حالة عنصر واحد على الأقل'); return; }
+    if (!anyChecked){ alert('Please mark at least one item'); return; }
     const rec = {
       id: 'INS-' + Date.now() + '-' + Math.random().toString(36).slice(2,7),
       unitId: currentUnit.id,
@@ -24516,16 +24607,14 @@ window.toggleInjuryPrintPreview = function(){
     };
     const list = loadRecs(); list.unshift(rec); saveRecs(list);
     localStorage.setItem('ymco_last_technician', tech);
-    // Play sound if available
     try { if (typeof window.playNotificationSound === 'function') window.playNotificationSound(); } catch(e){}
-    // Toast
     try {
       if (typeof window.showToast === 'function') {
-        window.showToast(`تم حفظ فحص ${currentUnit.name} ${allPassed?'✓ مطابق':'⚠ به ملاحظات'}`, allPassed?'success':'warning');
+        window.showToast(`Saved inspection for ${currentUnit.name} ${allPassed?'✓ Pass':'⚠ Issues'}`, allPassed?'success':'warning');
       } else {
-        alert(`تم حفظ فحص ${currentUnit.name}`);
+        alert(`Inspection saved for ${currentUnit.name}`);
       }
-    } catch(e){ alert('تم الحفظ'); }
+    } catch(e){ alert('Saved'); }
     closeChecklistForm();
     renderHub();
   };
@@ -24541,16 +24630,16 @@ window.toggleInjuryPrintPreview = function(){
         scanner = new Html5Qrcode('clScanReader');
         scanner.start(
           { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 250, height: 150 } },
+          { fps: 10, qrbox: { width: 250, height: 250 } },
           (decoded)=>{ handleScannedCode(decoded); },
           ()=>{}
         ).catch(err=>{
           document.getElementById('clScanReader').innerHTML =
-            `<div style="padding:20px;text-align:center;color:#ef4444;">تعذّر تشغيل الكاميرا: ${err}. استخدم الإدخال اليدوي بالأسفل.</div>`;
+            `<div style="padding:20px;text-align:center;color:#ef4444;">Camera unavailable: ${err}. Use manual entry below.</div>`;
         });
       } catch(e){
         document.getElementById('clScanReader').innerHTML =
-          `<div style="padding:20px;text-align:center;color:#ef4444;">خطأ في تحميل الماسح.</div>`;
+          `<div style="padding:20px;text-align:center;color:#ef4444;">Scanner failed to load.</div>`;
       }
     }, 100);
   };
@@ -24561,10 +24650,7 @@ window.toggleInjuryPrintPreview = function(){
   function handleScannedCode(code){
     const trimmed = (code||'').trim();
     const unit = loadUnits().find(u => u.barcode.toLowerCase() === trimmed.toLowerCase());
-    if (!unit){
-      alert('باركود غير معروف: ' + trimmed);
-      return;
-    }
+    if (!unit){ alert('Unknown barcode: ' + trimmed); return; }
     closeChecklistScanner();
     if (!document.getElementById('checklistsModal').classList.contains('show')) openChecklistsHub();
     openChecklistFormForUnit(unit.id);
@@ -24574,12 +24660,113 @@ window.toggleInjuryPrintPreview = function(){
     if (v) handleScannedCode(v);
   };
 
+  // ============ MANAGE ITEMS ============
+  let manageUnitId = null;
+  let manageDraft = [];
+  window.openChecklistManage = function(unitId){
+    const u = loadUnits().find(x=>x.id===unitId);
+    if (!u) return;
+    manageUnitId = unitId;
+    manageDraft = u.items.slice();
+    document.getElementById('clManageTitle').innerHTML =
+      `<i class="fas ${u.icon}" style="color:${u.color};"></i> Manage: ${u.name}`;
+    document.getElementById('clNewItemInput').value = '';
+    renderManageList();
+    document.getElementById('checklistManageModal').classList.add('show');
+  };
+  window.closeChecklistManage = function(){
+    document.getElementById('checklistManageModal').classList.remove('show');
+    manageUnitId = null; manageDraft = [];
+  };
+  function renderManageList(){
+    const wrap = document.getElementById('clManageList');
+    if (!manageDraft.length){ wrap.innerHTML = '<p style="color:#94a3b8;font-size:0.9em;">No items yet. Add some below.</p>'; return; }
+    wrap.innerHTML = manageDraft.map((name,idx)=>`
+      <div class="cl-manage-item">
+        <span style="font-weight:700;color:#64748b;min-width:24px;">${idx+1}.</span>
+        <input type="text" data-idx="${idx}" value="${String(name).replace(/"/g,'&quot;')}" oninput="clUpdateDraftItem(${idx}, this.value)" />
+        <button class="cl-btn cl-btn-ghost" onclick="clMoveItem(${idx},-1)" title="Up"><i class="fas fa-arrow-up"></i></button>
+        <button class="cl-btn cl-btn-ghost" onclick="clMoveItem(${idx},1)" title="Down"><i class="fas fa-arrow-down"></i></button>
+        <button class="cl-btn cl-btn-danger" onclick="clRemoveDraftItem(${idx})" title="Remove"><i class="fas fa-trash"></i></button>
+      </div>
+    `).join('');
+  }
+  window.clUpdateDraftItem = function(idx, val){ manageDraft[idx] = val; };
+  window.clRemoveDraftItem = function(idx){ manageDraft.splice(idx,1); renderManageList(); };
+  window.clMoveItem = function(idx, delta){
+    const j = idx + delta; if (j<0 || j>=manageDraft.length) return;
+    const tmp = manageDraft[idx]; manageDraft[idx] = manageDraft[j]; manageDraft[j] = tmp;
+    renderManageList();
+  };
+  window.clAddNewItem = function(){
+    const inp = document.getElementById('clNewItemInput');
+    const v = (inp.value||'').trim();
+    if (!v) return;
+    manageDraft.push(v);
+    inp.value = '';
+    renderManageList();
+  };
+  window.saveChecklistManage = function(){
+    if (!manageUnitId) return;
+    const cleaned = manageDraft.map(s=>String(s||'').trim()).filter(Boolean);
+    if (!cleaned.length){ alert('At least one item is required'); return; }
+    const units = loadUnits();
+    const u = units.find(x=>x.id===manageUnitId);
+    if (!u) return;
+    u.items = cleaned;
+    saveUnits(units);
+    closeChecklistManage();
+    renderHub();
+    try { if (typeof window.showToast === 'function') window.showToast('Checklist items updated','success'); } catch(e){}
+  };
+
+  // ============ QR BARCODE ============
+  let currentQrUnit = null;
+  window.openChecklistQr = function(unitId){
+    const u = loadUnits().find(x=>x.id===unitId);
+    if (!u) return;
+    currentQrUnit = u;
+    document.getElementById('clQrTitle').textContent = u.name;
+    document.getElementById('clQrText').textContent = u.barcode;
+    const holder = document.getElementById('clQrCode');
+    holder.innerHTML = '';
+    try {
+      if (window.QRCode){
+        new QRCode(holder, { text: u.barcode, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.H });
+      } else {
+        holder.innerHTML = `<img alt="QR" src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(u.barcode)}" />`;
+      }
+    } catch(e){
+      holder.innerHTML = `<img alt="QR" src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(u.barcode)}" />`;
+    }
+    document.getElementById('checklistQrModal').classList.add('show');
+  };
+  window.closeChecklistQr = function(){
+    document.getElementById('checklistQrModal').classList.remove('show');
+    currentQrUnit = null;
+  };
+  window.clPrintQr = function(){ window.print(); };
+  window.clDownloadQr = function(){
+    if (!currentQrUnit) return;
+    const holder = document.getElementById('clQrCode');
+    const img = holder.querySelector('img');
+    const canvas = holder.querySelector('canvas');
+    let dataUrl = null;
+    if (canvas) dataUrl = canvas.toDataURL('image/png');
+    else if (img) dataUrl = img.src;
+    if (!dataUrl) return;
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = currentQrUnit.barcode + '.png';
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+
   // ============ HISTORY ============
   window.openChecklistHistory = function(){
     document.getElementById('checklistHistoryModal').classList.add('show');
     const sel = document.getElementById('clHistUnit');
     const units = loadUnits();
-    sel.innerHTML = '<option value="">كل الوحدات</option>' + units.map(u=>`<option value="${u.id}">${u.name}</option>`).join('');
+    sel.innerHTML = '<option value="">All units</option>' + units.map(u=>`<option value="${u.id}">${u.name}</option>`).join('');
     renderChecklistHistory();
   };
   window.closeChecklistHistory = function(){
@@ -24597,11 +24784,11 @@ window.toggleInjuryPrintPreview = function(){
     if (from) recs = recs.filter(r=>r.ts>=from);
     if (to) recs = recs.filter(r=>r.ts<=to);
     const body = document.getElementById('clHistBody');
-    if (!recs.length){ body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#94a3b8;">لا توجد سجلات مطابقة</td></tr>'; return; }
+    if (!recs.length){ body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#94a3b8;">No matching records</td></tr>'; return; }
     body.innerHTML = recs.map(r=>{
       const fails = r.items.filter(i=>i.checked && !i.ok);
-      const st = r.allPassed ? '<span class="cl-unit-status cl-status-ok"><i class="fas fa-check"></i> مطابق</span>'
-                             : '<span class="cl-unit-status cl-status-fail"><i class="fas fa-triangle-exclamation"></i> ملاحظات</span>';
+      const st = r.allPassed ? '<span class="cl-unit-status cl-status-ok"><i class="fas fa-check"></i> Pass</span>'
+                             : '<span class="cl-unit-status cl-status-fail"><i class="fas fa-triangle-exclamation"></i> Issues</span>';
       return `<tr>
         <td>${r.unitName}</td>
         <td>${fmtDate(r.ts)}</td>
@@ -24619,26 +24806,26 @@ window.toggleInjuryPrintPreview = function(){
     const r = loadRecs().find(x=>x.id===id);
     if (!r) return;
     const detail = r.items.map(i=>{
-      if (!i.checked) return `<li style="background:#e2e8f0;color:#475569;">${i.name} <span>لم يُحدد</span></li>`;
+      if (!i.checked) return `<li style="background:#e2e8f0;color:#475569;">${i.name} <span>Not set</span></li>`;
       return `<li class="${i.ok?'pass':'fail'}"><span>${i.name}${i.notes?' — <em>'+i.notes+'</em>':''}</span><span>${i.ok?'✓':'✗'}</span></li>`;
     }).join('');
     const html = `<div style="padding:6px;">
       <h3 style="margin:0 0 6px;">${r.unitName}</h3>
-      <div style="color:#64748b;font-size:0.9em;margin-bottom:4px;">${fmtDate(r.ts)} — الفني: <b>${r.technician}</b></div>
-      ${r.generalNotes?`<div style="margin:6px 0;padding:8px;background:#fef3c7;border-radius:6px;">ملاحظات: ${r.generalNotes}</div>`:''}
+      <div style="color:#64748b;font-size:0.9em;margin-bottom:4px;">${fmtDate(r.ts)} — Technician: <b>${r.technician}</b></div>
+      ${r.generalNotes?`<div style="margin:6px 0;padding:8px;background:#fef3c7;border-radius:6px;">Notes: ${r.generalNotes}</div>`:''}
       <ul class="cl-detail-list">${detail}</ul>
     </div>`;
     const w = window.open('', '_blank', 'width=700,height=800');
     if (w){
       w.document.write(`<html><head><meta charset="utf-8"><title>Inspection ${r.id}</title>
-        <style>body{font-family:system-ui,sans-serif;padding:20px;direction:rtl;}
+        <style>body{font-family:system-ui,sans-serif;padding:20px;}
         ul{list-style:none;padding:0;} li{padding:8px 12px;margin-bottom:4px;border-radius:6px;display:flex;justify-content:space-between;}
         li.pass{background:#d1fae5;} li.fail{background:#fee2e2;}</style></head><body>${html}</body></html>`);
       w.document.close();
     }
   };
   window.clDeleteRec = function(id){
-    if (!confirm('حذف هذا السجل؟')) return;
+    if (!confirm('Delete this record?')) return;
     saveRecs(loadRecs().filter(r=>r.id!==id));
     renderChecklistHistory();
     renderHub();
@@ -24660,7 +24847,7 @@ window.toggleInjuryPrintPreview = function(){
   };
 
   // Close on backdrop click / Escape
-  ['checklistsModal','checklistFormModal','checklistHistoryModal','checklistScanModal'].forEach(id=>{
+  ['checklistsModal','checklistFormModal','checklistHistoryModal','checklistScanModal','checklistManageModal','checklistQrModal'].forEach(id=>{
     const el = document.getElementById(id);
     el.addEventListener('click', e=>{ if (e.target.id===id){
       if (id==='checklistScanModal') closeChecklistScanner();
@@ -24670,12 +24857,13 @@ window.toggleInjuryPrintPreview = function(){
   document.addEventListener('keydown', e=>{
     if (e.key !== 'Escape') return;
     if (document.getElementById('checklistScanModal').classList.contains('show')) closeChecklistScanner();
+    else if (document.getElementById('checklistQrModal').classList.contains('show')) closeChecklistQr();
+    else if (document.getElementById('checklistManageModal').classList.contains('show')) closeChecklistManage();
     else if (document.getElementById('checklistFormModal').classList.contains('show')) closeChecklistForm();
     else if (document.getElementById('checklistHistoryModal').classList.contains('show')) closeChecklistHistory();
     else if (document.getElementById('checklistsModal').classList.contains('show')) closeChecklistsHub();
   });
 
-  // Ensure defaults exist
   loadUnits();
 })();
 </script>
