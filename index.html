@@ -19118,6 +19118,8 @@ window.toggleInjuryPrintPreview = function(){
   firebase.initializeApp(firebaseConfig);
   const auth = firebase.auth();
   const db   = firebase.database();
+  // Ensure the session survives page navigations (e.g. going to checklists.html and back).
+  try { auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(){}); } catch(_){}
 
   // ---------- Expose unified DB helpers (shares auth session) ----------
   // كانت هناك تهيئة Modular منفصلة في أعلى الصفحة بدون مصادقة.
@@ -19320,14 +19322,24 @@ window.toggleInjuryPrintPreview = function(){
   }
 
   // ---------- Auth state ----------
+  let __authResolvedOnce = false;
   auth.onAuthStateChanged(async (user) => {
     if(!user){
       currentUser = null; currentUserRole = null; currentUserStatus = null; currentUserPermissions = null;
       try { if(window.__stopUserNotifications) window.__stopUserNotifications(); } catch(e){}
-      lockUI();
-
+      // On the very first callback after a page load, Firebase may still be
+      // restoring the persisted session from IndexedDB. Delay showing the
+      // login screen briefly so returning from checklists.html doesn't flash
+      // the sign-in form when a session actually exists.
+      if(!__authResolvedOnce){
+        __authResolvedOnce = true;
+        setTimeout(function(){ if(!auth.currentUser) lockUI(); }, 800);
+      } else {
+        lockUI();
+      }
       return;
     }
+    __authResolvedOnce = true;
     currentUser = user;
     // Load or create profile
     const userRef = db.ref('users/' + user.uid);

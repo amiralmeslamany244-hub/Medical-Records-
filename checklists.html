@@ -36,6 +36,9 @@
   };
   try {
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    // Keep the auth session in IndexedDB so returning to index.html
+    // doesn't force the user to sign in again.
+    try { firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(function(){}); } catch(_){}
     const db = firebase.database();
     window.firebaseApp     = firebase.app();
     window.firebaseDB      = db;
