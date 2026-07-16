@@ -7279,8 +7279,8 @@ window.YMCO_showSplash = function(){
                 <div class="qa-group" id="qaGroupChecklists">
                     <span class="qa-group-label"><i class="fas fa-clipboard-check"></i> Checklists</span>
                     <div class="qa-group-row">
-                        <button class="qa-btn i-amber" onclick="openChecklistsHub()" title="Open Checklists Hub"><i class="fas fa-clipboard-check"></i> Open Checklists Hub</button>
-                        <button class="qa-btn i-sky" onclick="openChecklistScanner()" title="Scan unit barcode to open checklist"><i class="fas fa-qrcode"></i> Scan Barcode</button>
+                        <button class="qa-btn i-amber" onclick="window.location.href='checklists.html?open=hub'" title="Open Checklists Hub (fast page)"><i class="fas fa-clipboard-check"></i> Open Checklists Hub</button>
+                        <button class="qa-btn i-sky" onclick="window.location.href='checklists.html?open=scan'" title="Scan unit barcode (fast page)"><i class="fas fa-qrcode"></i> Scan Barcode</button>
                     </div>
                 </div>
             </div>
@@ -19128,7 +19128,7 @@ window.toggleInjuryPrintPreview = function(){
   window.firebaseRef     = (database, path) => database.ref(path);
   window.firebaseSet     = (refObj, value) => refObj.set(value);
   window.firebaseGet     = (refObj) => refObj.get();
-  window.firebaseOnValue = (refObj, cb) => refObj.on('value', cb);
+  window.firebaseOnValue = (refObj, cb, cancelCb) => refObj.on('value', cb, cancelCb);
   window.firebaseChild   = (refObj, path) => refObj.child(path);
   window.firebasePush    = (refObj, value) => (value === undefined ? refObj.push() : refObj.push(value));
   window.firebaseRemove  = (refObj) => refObj.remove();
@@ -24362,7 +24362,7 @@ window.toggleInjuryPrintPreview = function(){
     </div>
     <div class="cl-form-row">
       <div>
-        <label>Technician Name</label>
+        <label>Specialist Nurse Name</label>
         <input id="clTechName" type="text" placeholder="Enter your name" />
       </div>
       <div>
@@ -24448,7 +24448,7 @@ window.toggleInjuryPrintPreview = function(){
     <div style="overflow-x:auto;">
       <table class="cl-history-table" id="clHistTable">
         <thead><tr>
-          <th>Unit</th><th>Date</th><th>Technician</th><th>Status</th><th>Failed</th><th>Actions</th>
+          <th>Unit</th><th>Date</th><th>Specialist Nurse</th><th>Status</th><th>Failed</th><th>Actions</th>
         </tr></thead>
         <tbody id="clHistBody"></tbody>
       </table>
@@ -24495,32 +24495,126 @@ window.toggleInjuryPrintPreview = function(){
              'Spare battery available','Last service date documented'] }
   ];
 
+  // PERF: cache to avoid repeated JSON.parse + merge on every call.
+  let __unitsCache = null;
+  window.__invalidateUnitsCache = function(){ __unitsCache = null; };
   function loadUnits(){
+    if (__unitsCache) return __unitsCache;
     try {
       const s = localStorage.getItem(UNITS_KEY);
       if (s) {
         const arr = JSON.parse(s);
-        // Merge in any new default units not yet present (upgrade path)
         const ids = new Set(arr.map(u=>u.id));
         let changed = false;
         DEFAULT_UNITS.forEach(du=>{ if (!ids.has(du.id)){ arr.push(JSON.parse(JSON.stringify(du))); changed = true; } });
         if (changed) localStorage.setItem(UNITS_KEY, JSON.stringify(arr));
+        __unitsCache = arr;
         return arr;
       }
     } catch(e){}
     localStorage.setItem(UNITS_KEY, JSON.stringify(DEFAULT_UNITS));
-    return JSON.parse(JSON.stringify(DEFAULT_UNITS));
+    __unitsCache = JSON.parse(JSON.stringify(DEFAULT_UNITS));
+    return __unitsCache;
   }
   function saveUnits(list){
+    __unitsCache = null;
     localStorage.setItem(UNITS_KEY, JSON.stringify(list));
     fbPushUnits(list);
   }
+  function normalizeBarcode(v){ return String(v == null ? '' : v).trim().toLowerCase(); }
+  function currentUnitMaps(){
+    const units = loadUnits();
+    const byId = new Map();
+    const byBarcode = new Map();
+    units.forEach(u => {
+      if (!u || !u.id) return;
+      byId.set(String(u.id), u);
+      const bc = normalizeBarcode(u.barcode);
+      if (bc) byBarcode.set(bc, u);
+    });
+    return { units, byId, byBarcode };
+  }
+  function normalizeInspectionRecord(r, maps){
+    if (!r || typeof r !== 'object' || !r.id || !r.ts) return null;
+    maps = maps || currentUnitMaps();
+    const bc = normalizeBarcode(r.barcode);
+    let unit = r.unitId ? maps.byId.get(String(r.unitId)) : null;
+    if (!unit && bc) unit = maps.byBarcode.get(bc) || null;
+    if (!unit) return null;
+    const expectedBc = normalizeBarcode(unit.barcode);
+    // A record with a barcode must belong to the same current checklist barcode.
+    // This is the main guard against one checklist borrowing another checklist's inspection.
+    if (expectedBc && bc && bc !== expectedBc) return null;
+    return Object.assign({}, r, {
+      unitId: unit.id,
+      unitName: r.unitName || unit.name,
+      barcode: r.barcode || unit.barcode
+    });
+  }
+  function sanitizeInspectionList(list){
+    const arr = Array.isArray(list) ? list : [];
+    const maps = currentUnitMaps();
+    const out = [];
+    const seen = new Set();
+    arr.forEach(r => {
+      const clean = normalizeInspectionRecord(r, maps);
+      if (!clean || seen.has(clean.id)) return;
+      seen.add(clean.id);
+      out.push(clean);
+    });
+    return out.sort((a,b)=>(b.ts||0)-(a.ts||0));
+  }
+  // PERF: cache sanitized records to avoid O(n) rescan on every read.
+  let __recsCache = null;
+  window.__invalidateRecsCache = function(){ __recsCache = null; };
   function loadRecs(){
-    try { return JSON.parse(localStorage.getItem(RECS_KEY) || '[]'); } catch(e){ return []; }
+    if (__recsCache) return __recsCache;
+    try { __recsCache = sanitizeInspectionList(JSON.parse(localStorage.getItem(RECS_KEY) || '[]')); }
+    catch(e){ __recsCache = []; }
+    return __recsCache;
   }
   function saveRecs(list){
-    localStorage.setItem(RECS_KEY, JSON.stringify(list));
-    fbPushRecs(list);
+    __recsCache = null;
+    localStorage.setItem(RECS_KEY, JSON.stringify(sanitizeInspectionList(list)));
+  }
+
+  // ============ DELETE TOMBSTONES ============
+  // Bug fix: deleting an inspection used to only strip it from localStorage.
+  // The Firebase per-record subscription (FB_RECS_BY_ID) then delivered the
+  // same record back in the next snapshot and mergeRecs re-inserted it, so
+  // the row reappeared instantly. We now:
+  //   1) mark the deleted id in a local tombstone list, and
+  //   2) actively remove it from Firebase (shared + user-fallback paths).
+  // Incoming snapshots and pending upload queues filter out any tombstoned id
+  // so a slow/blocked remote delete cannot resurrect the record.
+  const DELETED_KEY = 'ymco_checklist_deleted_v1';
+  const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+  function loadDeleted(){
+    try {
+      const raw = JSON.parse(localStorage.getItem(DELETED_KEY) || '{}');
+      if (!raw || typeof raw !== 'object') return {};
+      const now = Date.now();
+      let changed = false;
+      for (const k of Object.keys(raw)) {
+        const t = Number(raw[k]) || 0;
+        if (!t || (now - t) > TOMBSTONE_TTL_MS) { delete raw[k]; changed = true; }
+      }
+      if (changed) { try { localStorage.setItem(DELETED_KEY, JSON.stringify(raw)); } catch(_){} }
+      return raw;
+    } catch(_){ return {}; }
+  }
+  function isTombstoned(id){
+    if (!id) return false;
+    const t = loadDeleted();
+    return Object.prototype.hasOwnProperty.call(t, id);
+  }
+  function addTombstone(id){
+    if (!id) return;
+    try {
+      const t = loadDeleted();
+      t[id] = Date.now();
+      localStorage.setItem(DELETED_KEY, JSON.stringify(t));
+    } catch(_){}
   }
 
   // ============ FIREBASE SYNC ============
@@ -24531,41 +24625,214 @@ window.toggleInjuryPrintPreview = function(){
   let fbStarted = false;
   let fbSuppress = false; // prevent write-loops on remote updates
   let fbToastShown = false;
+  let fbFallbackToastShown = false;
+  let fbWaitingToastShown = false;
+  let pendingRecs = [];        // queued single-record upserts while auth/db is not ready
+  let pendingRecsList = null;  // queued full-array push
+  let pendingUnits = null;     // queued units push
+  const fbAttachedFallbacks = new Set();
 
   function fbDb(){ return window.firebaseDB || null; }
+  function fbUser(){
+    try { return (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null; }
+    catch(_){ return null; }
+  }
+  function fbUserBase(){
+    const u = fbUser();
+    return (u && u.uid) ? ('users/' + u.uid + '/checklists') : '';
+  }
+  function fbAuthFields(){
+    const u = fbUser();
+    return (u && u.uid) ? { userId: u.uid, createdByUid: u.uid, syncedByUid: u.uid } : {};
+  }
+  function withAuthFields(rec){
+    if (!rec || typeof rec !== 'object') return rec;
+    return Object.assign({}, rec, fbAuthFields(), { syncedAt: Date.now() });
+  }
   function fbToast(msg, kind){
     try { if (typeof window.showToast === 'function') window.showToast(msg, kind || 'info'); } catch(_){}
   }
+  function isPermissionError(e){
+    return !!(e && (e.code === 'PERMISSION_DENIED' || /permission/i.test(String(e.message||e))));
+  }
   function fbWarn(scope, e){
     console.warn('[checklist-sync]', scope, e);
-    if (e && (e.code === 'PERMISSION_DENIED' || /permission/i.test(String(e.message||e)))) {
-      fbToast('Checklist sync blocked by Firebase rules ('+scope+'). Please log in.', 'warning');
+    if (isPermissionError(e)) {
+      fbToast('Checklist sync blocked by Firebase rules ('+scope+'). Data is still saved locally.', 'warning');
+    }
+  }
+  function queueWaitingToast(){
+    if (fbWaitingToastShown) return;
+    fbWaitingToastShown = true;
+    fbToast('تم الحفظ محلياً — سيتم رفع التفتيش تلقائياً بعد جاهزية تسجيل الدخول في Firebase.', 'warning');
+  }
+  async function fbSetWithFallback(path, value, scope){
+    const db = fbDb();
+    if (!db || !window.firebaseRef || !window.firebaseSet) throw new Error('Firebase database is not ready');
+    try {
+      await window.firebaseSet(window.firebaseRef(db, path), value);
+      return { path, fallback:false };
+    } catch(e){
+      // Some existing Firebase rules allow writing only inside users/<uid>.
+      // If the shared checklists/* path is blocked, still persist the inspection under the signed-in user.
+      if (isPermissionError(e) && path.indexOf('checklists/') === 0) {
+        const base = fbUserBase();
+        if (base) {
+          const fallbackPath = base + '/' + path.slice('checklists/'.length);
+          try {
+            await window.firebaseSet(window.firebaseRef(db, fallbackPath), value);
+            if (!fbFallbackToastShown) {
+              fbToast('Firebase rules block shared checklists; inspection saved under your user profile path.', 'warning');
+              fbFallbackToastShown = true;
+            }
+            console.info('[checklist-sync] wrote fallback path', fallbackPath);
+            return { path:fallbackPath, fallback:true };
+          } catch(e2){
+            fbWarn(scope + ' fallback', e2);
+            throw e2;
+          }
+        }
+      }
+      fbWarn(scope, e);
+      throw e;
     }
   }
   function fbPushUnits(list){
-    if (!fbReady || fbSuppress) return;
-    try {
-      const db = fbDb(); if (!db) return;
-      window.firebaseSet(window.firebaseRef(db, FB_UNITS_PATH), list)
-        .catch(e=>fbWarn('units', e));
-    } catch(e){ fbWarn('units', e); }
+    if (fbSuppress) return;
+    if (!fbReady || !fbUser()) { pendingUnits = list; queueWaitingToast(); return; }
+    fbSetWithFallback(FB_UNITS_PATH, list, 'units').catch(()=>{});
   }
   function fbPushRecs(list){
-    if (!fbReady || fbSuppress) return;
-    try {
-      const db = fbDb(); if (!db) return;
-      window.firebaseSet(window.firebaseRef(db, FB_RECS_PATH), list)
-        .catch(e=>fbWarn('recs', e));
-    } catch(e){ fbWarn('recs', e); }
+    if (fbSuppress) return;
+    if (!fbReady || !fbUser()) { pendingRecsList = list; queueWaitingToast(); return; }
+    const prepared = (Array.isArray(list) ? list : []).map(r=>withAuthFields(r));
+    fbSetWithFallback(FB_RECS_PATH, prepared, 'recs').catch(()=>{});
   }
+  // Encode a Firebase RTDB key by replacing forbidden characters.
+  function encodeFbKey(s){
+    return String(s == null ? '' : s).replace(/[.#$\[\]\/]/g, '_');
+  }
+  // Public, minimal summary — safe for unauthenticated read.
+  // Only last inspection date + specialist nurse name (plus unit identity + pass/fail flag).
+  // Excludes items, notes, uid, and any sensitive detail.
+  function fbUpsertPublicChecklist(rec){
+    if (fbSuppress || !rec || !rec.barcode) return;
+    const db = fbDb();
+    if (!db || !window.firebaseRef || !window.firebaseSet) return;
+    const key = encodeFbKey(rec.barcode);
+    if (!key) return;
+    const safeItems = Array.isArray(rec.items) ? rec.items.map(it => ({
+      name:    String((it && it.name) || ''),
+      ok:      !!(it && it.ok),
+      checked: !!(it && (it.checked || it.ok || it.ok === false && it.checked)),
+      notes:   String((it && it.notes) || '')
+    })) : [];
+    const summary = {
+      unitId:         rec.unitId || null,
+      unitName:       rec.unitName || '',
+      barcode:        String(rec.barcode),
+      lastTs:         Number(rec.ts) || Date.now(),
+      specialistNurse:String(rec.specialistNurse || ''),
+      status:         rec.allPassed ? 'pass' : 'fail',
+      items:          safeItems,
+      generalNotes:   String(rec.generalNotes || ''),
+      itemCount:      safeItems.length,
+      failedCount:    safeItems.filter(i => i.checked && !i.ok).length,
+      updatedAt:      Date.now()
+    };
+    window.firebaseSet(window.firebaseRef(db, 'publicChecklists/' + key), summary)
+      .then(()=>{ console.info('[checklist-sync] wrote publicChecklists/' + key); })
+      .catch(e=>{ fbWarn('publicChecklists', e); });
+  }
+  window.__readPublicChecklist = function(barcode){
+    const db = fbDb();
+    if (!db || !window.firebaseRef || !window.firebaseGet) return Promise.resolve(null);
+    return window.firebaseGet(window.firebaseRef(db, 'publicChecklists/' + encodeFbKey(barcode)))
+      .then(s => s && s.exists() ? s.val() : null);
+  };
   // Upsert a single inspection record so it lands atomically even under concurrent writers.
   function fbUpsertRec(rec){
-    if (!fbReady || fbSuppress || !rec || !rec.id) return;
+    if (fbSuppress || !rec || !rec.id){ if(!rec||!rec.id) console.warn('[checklist-sync] upsert skipped: no id', rec); return; }
+    if (!fbReady || !fbUser()){
+      pendingRecs.push(rec);
+      console.info('[checklist-sync] queued inspection until Firebase auth is ready', rec.id, 'queue size=', pendingRecs.length);
+      queueWaitingToast();
+      return;
+    }
+    const prepared = withAuthFields(rec);
+    fbSetWithFallback(FB_RECS_BY_ID + '/' + rec.id, prepared, 'rec-upsert')
+      .then(res=>{
+        console.info('[checklist-sync] wrote inspection', rec.id, 'at', res.path);
+        // Mirror a minimal public summary keyed by barcode (read-only for visitors).
+        try { fbUpsertPublicChecklist(rec); } catch(_){}
+      })
+      .catch(e=>{ fbToast('Failed to sync inspection to Firebase: '+((e && e.message)||e), 'error'); });
+  }
+
+  // Remove an inspection from Firebase so it does not stream back to clients.
+  // Tries the shared path first, then the user-scoped fallback used by fbSetWithFallback.
+  // Also clears the public summary keyed by barcode when available.
+  function fbRemoveRec(id, barcode){
     try {
-      const db = fbDb(); if (!db) return;
-      window.firebaseSet(window.firebaseRef(db, FB_RECS_BY_ID + '/' + rec.id), rec)
-        .catch(e=>fbWarn('rec-upsert', e));
-    } catch(e){ fbWarn('rec-upsert', e); }
+      const db = fbDb();
+      if (!db || !window.firebaseRef) return;
+      const remove = window.firebaseRemove
+        || (window.firebaseSet ? (ref)=>window.firebaseSet(ref, null) : null);
+      if (!remove) return;
+      const paths = [ FB_RECS_BY_ID + '/' + id ];
+      const base = fbUserBase();
+      if (base) paths.push(base + '/inspections_by_id/' + id);
+      paths.forEach(pth=>{
+        try {
+          const r = window.firebaseRef(db, pth);
+          Promise.resolve(remove(r)).catch(e=>{
+            if (!isPermissionError(e)) console.warn('[checklist-sync] delete failed', pth, e);
+          });
+        } catch(e){ console.warn('[checklist-sync] delete threw', pth, e); }
+      });
+      if (barcode) {
+        try {
+          const key = encodeFbKey(barcode);
+          if (key) {
+            const r2 = window.firebaseRef(db, 'publicChecklists/' + key);
+            Promise.resolve(remove(r2)).catch(()=>{});
+          }
+        } catch(_){}
+      }
+    } catch(e){ console.warn('[checklist-sync] fbRemoveRec error', e); }
+  }
+
+  async function flushPending(){
+    if (!fbReady || !fbUser()) return;
+    try {
+      if (pendingUnits){
+        const list = pendingUnits;
+        try { await fbSetWithFallback(FB_UNITS_PATH, list, 'units-flush'); pendingUnits = null; }
+        catch(e){ fbWarn('units-flush', e); }
+      }
+      if (pendingRecsList){
+        const list = (Array.isArray(pendingRecsList) ? pendingRecsList : []).map(r=>withAuthFields(r));
+        try { await fbSetWithFallback(FB_RECS_PATH, list, 'recs-flush'); pendingRecsList = null; }
+        catch(e){ fbWarn('recs-flush', e); }
+      }
+      if (pendingRecs.length){
+        const copy = pendingRecs.slice();
+        pendingRecs.length = 0;
+        let ok = 0;
+        for (const r of copy){
+          try {
+            const rec = withAuthFields(r);
+            const res = await fbSetWithFallback(FB_RECS_BY_ID + '/' + rec.id, rec, 'rec-flush');
+            ok++;
+            try { fbUpsertPublicChecklist(r); } catch(_){}
+            console.info('[checklist-sync] flushed inspection', rec.id, 'at', res.path);
+          } catch(e){
+            pendingRecs.push(r); // keep it queued; do not lose local data when rules/network fail
+          }
+        }
+        if (ok) fbToast('Uploaded '+ok+' pending checklist inspection(s) to Firebase', 'success');
+      }
+    } catch(e){ fbWarn('flush', e); }
   }
   // Merge remote list with local by id, most recent first, dedup on id.
   function mergeRecs(localArr, remoteArr){
@@ -24582,93 +24849,182 @@ window.toggleInjuryPrintPreview = function(){
     try { if (document.getElementById('checklistsModal')?.classList.contains('show')) renderHub(); } catch(_){}
     try { if (document.getElementById('checklistHistoryModal')?.classList.contains('show') && typeof window.renderChecklistHistory === 'function') window.renderChecklistHistory(); } catch(_){}
   }
-  // Expose upsert so saveChecklistInspection can call it in addition to the array push.
+  // Expose helpers for troubleshooting and for saveChecklistInspection.
   window.__checklistFbUpsertRec = fbUpsertRec;
+  window.__checklistFirebaseStatus = function(){
+    return {
+      db: !!fbDb(),
+      authUser: !!fbUser(),
+      uid: fbUser() && fbUser().uid,
+      ready: fbReady,
+      started: fbStarted,
+      pendingSingle: pendingRecs.length,
+      pendingList: !!pendingRecsList,
+      pendingUnits: !!pendingUnits,
+      sharedPath: FB_RECS_BY_ID,
+      fallbackBase: fbUserBase()
+    };
+  };
+
+  function attachValue(path, cb, scope){
+    try {
+      const db = fbDb(); if (!db || !window.firebaseRef || !window.firebaseOnValue) return;
+      window.firebaseOnValue(window.firebaseRef(db, path), cb, function(err){
+        fbWarn(scope + '-sub', err);
+        if (isPermissionError(err) && path.indexOf('checklists/') === 0) {
+          const base = fbUserBase();
+          if (!base) return;
+          const fallbackPath = base + '/' + path.slice('checklists/'.length);
+          if (fbAttachedFallbacks.has(fallbackPath)) return;
+          fbAttachedFallbacks.add(fallbackPath);
+          console.info('[checklist-sync] attaching fallback listener', fallbackPath);
+          attachValue(fallbackPath, cb, scope + '-fallback');
+        }
+      });
+    } catch(e){ fbWarn(scope + '-sub', e); }
+  }
 
   function initFirebaseSync(){
-    if (fbStarted) return;
     const db = fbDb();
+    const user = fbUser();
     if (!db || !window.firebaseRef || !window.firebaseOnValue) return;
+    if (!user) { fbReady = false; return; }
+    if (fbStarted) { fbReady = true; flushPending(); return; }
     fbStarted = true;
     fbReady = true;
-    if (!fbToastShown){ fbToast('Checklists cloud sync connected', 'success'); fbToastShown = true; }
+    fbWaitingToastShown = false;
+    if (!fbToastShown){ fbToast('Checklists Firebase sync connected', 'success'); fbToastShown = true; }
 
-    // Seed remote units if missing
+    // Flush queued writes made before auth/db became ready.
+    flushPending();
+
+    // Push any existing local inspections that may not exist on the server yet.
+    try {
+      const _localRecs = loadRecs();
+      if (Array.isArray(_localRecs) && _localRecs.length){
+        _localRecs.forEach(r=>{
+          if (r && r.id) {
+            const rec = withAuthFields(r);
+            fbSetWithFallback(FB_RECS_BY_ID + '/' + rec.id, rec, 'rec-backfill').catch(()=>{});
+          }
+        });
+        console.info('[checklist-sync] attempted backfill of', _localRecs.length, 'local inspections');
+      }
+    } catch(e){ fbWarn('backfill', e); }
+
+    // Seed remote units if missing. If shared path is blocked, fallback writer handles users/<uid>/checklists/units.
     try {
       window.firebaseGet(window.firebaseRef(db, FB_UNITS_PATH)).then(snap=>{
         if (!snap || !snap.exists()) fbPushUnits(loadUnits());
-      }).catch(e=>fbWarn('units-seed', e));
+      }).catch(e=>{
+        if (isPermissionError(e)) fbPushUnits(loadUnits());
+        else fbWarn('units-seed', e);
+      });
     } catch(e){ fbWarn('units-seed', e); }
 
-    // Subscribe units
-    try {
-      window.firebaseOnValue(window.firebaseRef(db, FB_UNITS_PATH), (snap)=>{
-        const val = snap && snap.val();
-        if (!val) return;
-        fbSuppress = true;
-        try { localStorage.setItem(UNITS_KEY, JSON.stringify(val)); } catch(_){}
-        fbSuppress = false;
-        refreshOpenViews();
-      });
-    } catch(e){ fbWarn('units-sub', e); }
+    // Subscribe units (shared path, with automatic users/<uid>/checklists fallback if rules block it).
+    attachValue(FB_UNITS_PATH, (snap)=>{
+      const val = snap && snap.val();
+      if (!val) return;
+      // Validate: must be a non-empty array of objects, unique ids, unique barcodes, and every DEFAULT_UNITS id present.
+      // Otherwise keep the existing local list to avoid a corrupt snapshot merging bad ids into the hub.
+      let list = null;
+      try { list = Array.isArray(val) ? val : Object.values(val); } catch(_){ list = null; }
+      if (!Array.isArray(list) || !list.length) return;
+      const seenIds = new Set();
+      const seenBcs = new Set();
+      let bad = false;
+      for (const u of list) {
+        if (!u || typeof u !== 'object' || !u.id || !u.barcode) { bad = true; break; }
+        if (seenIds.has(u.id) || seenBcs.has(String(u.barcode).toLowerCase())) { bad = true; break; }
+        seenIds.add(u.id);
+        seenBcs.add(String(u.barcode).toLowerCase());
+      }
+      const requiredIds = DEFAULT_UNITS.map(d => d.id);
+      const missingDefault = requiredIds.some(id => !seenIds.has(id));
+      if (bad || missingDefault) {
+        console.warn('[checklist-sync] rejected units snapshot (duplicates/missing defaults); keeping local units');
+        return;
+      }
+      fbSuppress = true;
+      try { localStorage.setItem(UNITS_KEY, JSON.stringify(list)); } catch(_){}
+      fbSuppress = false;
+      refreshOpenViews();
+    }, 'units');
 
-    // Subscribe inspections array (legacy path) — merge instead of overwrite.
-    try {
-      window.firebaseOnValue(window.firebaseRef(db, FB_RECS_PATH), (snap)=>{
-        const remote = (snap && snap.val()) || [];
-        const local  = loadRecs();
-        const merged = mergeRecs(local, remote);
-        fbSuppress = true;
-        try { localStorage.setItem(RECS_KEY, JSON.stringify(merged)); } catch(_){}
-        fbSuppress = false;
-        refreshOpenViews();
-      });
-    } catch(e){ fbWarn('recs-sub', e); }
+    // Legacy array-subscription intentionally disabled — the per-record path below is the single source of truth.
+    // (Previously subscribing here caused another unit's stale array to overwrite a fresh inspection.)
 
     // Subscribe per-record path — this is the reliable multi-user channel.
-    try {
-      window.firebaseOnValue(window.firebaseRef(db, FB_RECS_BY_ID), (snap)=>{
-        const obj = (snap && snap.val()) || {};
-        const remoteArr = Object.values(obj);
-        const local = loadRecs();
-        const merged = mergeRecs(local, remoteArr);
-        fbSuppress = true;
-        try { localStorage.setItem(RECS_KEY, JSON.stringify(merged)); } catch(_){}
-        fbSuppress = false;
-        // Also mirror merged array back to legacy path so old readers stay consistent.
-        try {
-          const db2 = fbDb();
-          if (db2) window.firebaseSet(window.firebaseRef(db2, FB_RECS_PATH), merged).catch(()=>{});
-        } catch(_){}
-        refreshOpenViews();
-      });
-    } catch(e){ fbWarn('recs-by-id-sub', e); }
+    attachValue(FB_RECS_BY_ID, (snap)=>{
+      const obj = (snap && snap.val()) || {};
+      const remoteArrRaw = Object.values(obj);
+      const local = loadRecs();
+      const remoteArr = [];
+      let dropped = 0;
+      const _tombs = loadDeleted();
+      for (const raw of remoteArrRaw) {
+        // normalizeInspectionRecord already enforces the unitId+barcode match against
+        // loaded units, so any cross-checklist contamination is filtered here.
+        const r = normalizeInspectionRecord(raw);
+        if (!r) { dropped++; continue; }
+        // Skip any record the user has deleted locally; also try to clean it up remotely.
+        if (r.id && Object.prototype.hasOwnProperty.call(_tombs, r.id)) {
+          try { fbRemoveRec(r.id, r.barcode); } catch(_){}
+          dropped++;
+          continue;
+        }
+        remoteArr.push(r);
+      }
+      if (dropped) console.info('[checklist-sync] ignored', dropped, 'invalid remote inspection(s) (unitId/barcode mismatch)');
+      const merged = mergeRecs(local, remoteArr);
+      fbSuppress = true;
+      try { localStorage.setItem(RECS_KEY, JSON.stringify(sanitizeInspectionList(merged))); } catch(_){}
+      fbSuppress = false;
+      refreshOpenViews();
+    }, 'recs-by-id');
   }
 
-  // Wait for auth so writes/reads carry a valid token (rules typically require auth != null).
+  // Wait for Firebase Auth so writes/reads carry a valid token.
   function armSync(){
-    if (fbStarted) return;
     try {
       if (typeof firebase !== 'undefined' && firebase.auth) {
         firebase.auth().onAuthStateChanged(function(user){
           if (user) initFirebaseSync();
+          else {
+            fbReady = false;
+            console.info('[checklist-sync] waiting for Firebase login before uploading inspections');
+          }
         });
-        // If a user is already available synchronously, start immediately too.
         if (firebase.auth().currentUser) initFirebaseSync();
       } else {
-        // Fallback: no auth SDK available — try direct init.
-        initFirebaseSync();
+        console.warn('[checklist-sync] Firebase Auth SDK is not available; inspections will stay local until auth is available.');
       }
     } catch(e){ console.warn('[checklist-sync] arm failed', e); }
   }
   if (window.firebaseDB) armSync();
   else window.addEventListener('firebase-ready', armSync, { once:true });
-  // Extra safety: retry once after 3s in case firebase-ready dispatched before this listener registered.
+  // Extra safety: retry in case firebase-ready dispatched before this listener registered.
   setTimeout(armSync, 3000);
+  setTimeout(function(){
+    if (!fbReady && pendingRecs.length) queueWaitingToast();
+  }, 5000);
 
   function fmtDate(ts){ return new Date(ts).toLocaleString(); }
-  function lastRecFor(unitId, recs){
-    return recs.filter(r=>r.unitId===unitId).sort((a,b)=>b.ts-a.ts)[0];
+  function lastRecFor(unitId, recs, unitBarcode){
+    if (!unitId || !Array.isArray(recs)) return null;
+    const uid = String(unitId);
+    const ubc = unitBarcode ? String(unitBarcode).toLowerCase() : null;
+    return recs
+      .filter(r => {
+        if (!r || typeof r !== 'object') return false;
+        if (!r.unitId || String(r.unitId) !== uid) return false;
+        // When we know the current barcode for this unit, require the record's barcode to match.
+        // This prevents a stale record from a previously-renamed/redefined unit from leaking in.
+        if (ubc && r.barcode && String(r.barcode).toLowerCase() !== ubc) return false;
+        return true;
+      })
+      .sort((a,b)=>(b.ts||0)-(a.ts||0))[0] || null;
   }
   function statusOf(rec){
     if (!rec) return {cls:'cl-status-none', label:'Not inspected', icon:'fa-circle-question'};
@@ -24683,7 +25039,7 @@ window.toggleInjuryPrintPreview = function(){
     const units = loadUnits();
     const recs = loadRecs();
     grid.innerHTML = units.map(u=>{
-      const last = lastRecFor(u.id, recs);
+      const last = lastRecFor(u.id, recs, u.barcode);
       const st = statusOf(last);
       return `<div class="cl-unit-card">
         <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -24698,7 +25054,7 @@ window.toggleInjuryPrintPreview = function(){
           <span class="cl-barcode-chip">${u.barcode}</span>
         </div>
         <div class="cl-unit-meta">
-          ${ last ? `Last: ${fmtDate(last.ts)} — <b>${last.technician||'—'}</b>` : 'Not inspected yet' }
+          ${ last ? `Last: ${fmtDate(last.ts)} — <b>${last.specialistNurse||'—'}</b>` : 'Not inspected yet' }
         </div>
         <div class="cl-card-buttons">
           <button class="cl-btn cl-btn-ok" onclick="openChecklistFormForUnit('${u.id}')"><i class="fas fa-clipboard-check"></i> Inspect</button>
@@ -24740,7 +25096,7 @@ window.toggleInjuryPrintPreview = function(){
       `<i class="fas ${u.icon}" style="color:${u.color};"></i> Inspect: ${u.name}`;
     document.getElementById('clDateTime').value = new Date().toLocaleString();
     document.getElementById('clGeneralNotes').value = '';
-    document.getElementById('clTechName').value = localStorage.getItem('ymco_last_technician') || '';
+    document.getElementById('clTechName').value = localStorage.getItem('ymco_last_specialist_nurse') || '';
     const wrap = document.getElementById('clItemsWrap');
     wrap.innerHTML = u.items.map((it,idx)=>`
       <div class="cl-form-item" data-idx="${idx}">
@@ -24769,7 +25125,7 @@ window.toggleInjuryPrintPreview = function(){
   window.saveChecklistInspection = function(){
     if (!currentUnit) return;
     const tech = document.getElementById('clTechName').value.trim();
-    if (!tech){ alert('Please enter the technician name'); return; }
+    if (!tech){ alert('Please enter the specialist nurse name'); return; }
     const rows = document.querySelectorAll('#clItemsWrap .cl-form-item');
     const items = []; let allPassed = true; let anyChecked = false;
     rows.forEach((row,idx)=>{
@@ -24785,20 +25141,37 @@ window.toggleInjuryPrintPreview = function(){
       });
     });
     if (!anyChecked){ alert('Please mark at least one item'); return; }
+    const authUser = fbUser();
     const rec = {
       id: 'INS-' + Date.now() + '-' + Math.random().toString(36).slice(2,7),
+      userId: authUser && authUser.uid ? authUser.uid : null,
+      createdByUid: authUser && authUser.uid ? authUser.uid : null,
       unitId: currentUnit.id,
       unitName: currentUnit.name,
       barcode: currentUnit.barcode,
-      technician: tech,
+      specialistNurse: tech,
       ts: Date.now(),
       items,
       allPassed,
       generalNotes: document.getElementById('clGeneralNotes').value.trim()
     };
-    const list = loadRecs(); list.unshift(rec); saveRecs(list);
+    // Save locally only for this selected checklist; do not import/push any full inspection array.
+    try {
+      const list = loadRecs().filter(r => r && r.id !== rec.id);
+      list.unshift(rec);
+      __recsCache = null;
+      localStorage.setItem(RECS_KEY, JSON.stringify(sanitizeInspectionList(list)));
+    } catch(_){}
+    // Upsert this single record to Firebase (per-record path only).
     try { if (typeof window.__checklistFbUpsertRec === 'function') window.__checklistFbUpsertRec(rec); } catch(_){}
-    localStorage.setItem('ymco_last_technician', tech);
+    // If cloud sync isn't ready yet, tell the user the record is queued locally.
+    try {
+      const st = (typeof window.__checklistFirebaseStatus === 'function') ? window.__checklistFirebaseStatus() : null;
+      if (!st || !st.ready || !st.authUser) {
+        if (typeof window.showToast === 'function') window.showToast('Saved locally — waiting for Firebase login/rules before upload', 'warning');
+      }
+    } catch(_){}
+    localStorage.setItem('ymco_last_specialist_nurse', tech);
     try { if (typeof window.playNotificationSound === 'function') window.playNotificationSound(); } catch(e){}
     try {
       if (typeof window.showToast === 'function') {
@@ -24817,7 +25190,7 @@ window.toggleInjuryPrintPreview = function(){
     document.getElementById('checklistScanModal').classList.add('show');
     document.getElementById('clManualBarcode').value = '';
     window.updateChecklistsGroupActive();
-    setTimeout(()=>{
+    requestAnimationFrame(()=>{
       if (!window.Html5Qrcode) return;
       try {
         scanner = new Html5Qrcode('clScanReader');
@@ -24834,25 +25207,174 @@ window.toggleInjuryPrintPreview = function(){
         document.getElementById('clScanReader').innerHTML =
           `<div style="padding:20px;text-align:center;color:#ef4444;">Scanner failed to load.</div>`;
       }
-    }, 100);
+    });
   };
   window.closeChecklistScanner = function(){
     document.getElementById('checklistScanModal').classList.remove('show');
     window.updateChecklistsGroupActive();
     if (scanner){ try { scanner.stop().then(()=>scanner.clear()).catch(()=>{}); } catch(e){} scanner = null; }
   };
+  let __scanBusy = false;
   function handleScannedCode(code){
+    if (__scanBusy) return; // PERF: ignore extra frames from continuous scanner
     let trimmed = (code||'').trim();
-    // Accept full URLs containing ?checklist=BARCODE
     try {
       const m = trimmed.match(/[?&]checklist=([^&]+)/i);
       if (m) trimmed = decodeURIComponent(m[1]);
     } catch(e){}
     const unit = loadUnits().find(u => u.barcode.toLowerCase() === trimmed.toLowerCase());
     if (!unit){ alert('Unknown barcode: ' + trimmed); return; }
+    __scanBusy = true;
+    // Stop camera immediately so decoding doesn't compete with modal render.
+    try {
+      if (scanner) { scanner.stop().then(()=>{ try{scanner.clear();}catch(_){} }).catch(()=>{}); scanner = null; }
+    } catch(_){}
     closeChecklistScanner();
-    if (!document.getElementById('checklistsModal').classList.contains('show')) openChecklistsHub();
-    openChecklistFormForUnit(unit.id);
+    setTimeout(()=>{ __scanBusy = false; }, 800);
+    // Ask the scanner whether they are an Inspector (فاحص) who needs to fill
+    // the checklist (login required) or an Auditor (مفتش) who only needs a
+    // read-only view of the unit + previous inspections (no login required).
+    showChecklistRoleChoice(unit);
+  }
+
+  // ============ ROLE CHOICE (Inspector vs Auditor) ============
+  function ensureRoleChoiceModal(){
+    let m = document.getElementById('clRoleChoiceModal');
+    if (m) return m;
+    m = document.createElement('div');
+    m.id = 'clRoleChoiceModal';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.75);z-index:1000010;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px);';
+    m.innerHTML = `
+      <div style="background:#fff;border-radius:16px;max-width:520px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.35);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <h2 style="margin:0;font-size:1.15rem;color:#0f172a;"><i class="fas fa-user-shield"></i> Select Role — اختر الصلاحية</h2>
+          <button type="button" onclick="closeChecklistRoleChoice()" style="background:#f1f5f9;border:none;width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:16px;color:#475569;">&times;</button>
+        </div>
+        <div id="clRoleChoiceUnit" style="font-size:.95rem;color:#475569;margin-bottom:16px;"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <button type="button" id="clRoleInspectorBtn" style="padding:16px 12px;border:2px solid #0284c7;background:#e0f2fe;color:#0c4a6e;border-radius:12px;cursor:pointer;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <i class="fas fa-clipboard-check" style="font-size:1.8rem;"></i>
+            <span>Inspector — فاحص</span>
+            <span style="font-size:.72rem;font-weight:500;opacity:.8;">Login required · يتطلب تسجيل دخول</span>
+          </button>
+          <button type="button" id="clRoleAuditorBtn" style="padding:16px 12px;border:2px solid #059669;background:#d1fae5;color:#064e3b;border-radius:12px;cursor:pointer;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:8px;">
+            <i class="fas fa-eye" style="font-size:1.8rem;"></i>
+            <span>Auditor — مفتش</span>
+            <span style="font-size:.72rem;font-weight:500;opacity:.8;">View only · عرض فقط</span>
+          </button>
+        </div>
+      </div>`;
+    document.body.appendChild(m);
+    m.addEventListener('click', e => { if (e.target === m) closeChecklistRoleChoice(); });
+    return m;
+  }
+  window.closeChecklistRoleChoice = function(){
+    const m = document.getElementById('clRoleChoiceModal');
+    if (m) m.style.display = 'none';
+  };
+  function showChecklistRoleChoice(unit){
+    const m = ensureRoleChoiceModal();
+    document.getElementById('clRoleChoiceUnit').innerHTML =
+      `<i class="fas ${unit.icon||'fa-cube'}" style="color:${unit.color||'#0284c7'};"></i> <b>${unit.name}</b> <span style="opacity:.7;">· ${unit.barcode}</span>`;
+    const insBtn = document.getElementById('clRoleInspectorBtn');
+    const audBtn = document.getElementById('clRoleAuditorBtn');
+    insBtn.onclick = function(){
+      const u = fbUser();
+      if (!u){
+        alert('Inspector access requires login.\nصلاحية الفاحص تتطلب تسجيل الدخول أولاً.');
+        return;
+      }
+      closeChecklistRoleChoice();
+      // PERF: open the form directly instead of rendering the whole Hub first.
+      openChecklistFormForUnit(unit.id);
+    };
+    audBtn.onclick = function(){
+      closeChecklistRoleChoice();
+      openAuditorView(unit);
+    };
+    m.style.display = 'flex';
+  }
+
+  // ============ AUDITOR VIEW (read-only) ============
+  function ensureAuditorModal(){
+    let m = document.getElementById('clAuditorModal');
+    if (m) return m;
+    m = document.createElement('div');
+    m.id = 'clAuditorModal';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.75);z-index:1000011;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;backdrop-filter:blur(6px);';
+    m.innerHTML = `
+      <div style="background:#fff;border-radius:16px;max-width:820px;width:100%;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.35);margin:20px 0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;">
+          <h2 id="clAuditorTitle" style="margin:0;font-size:1.1rem;color:#0f172a;"><i class="fas fa-eye"></i> Auditor View — عرض المفتش</h2>
+          <button type="button" onclick="closeAuditorView()" style="background:#f1f5f9;border:none;width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:16px;color:#475569;">&times;</button>
+        </div>
+        <div id="clAuditorBody"></div>
+      </div>`;
+    document.body.appendChild(m);
+    m.addEventListener('click', e => { if (e.target === m) closeAuditorView(); });
+    return m;
+  }
+  window.closeAuditorView = function(){
+    const m = document.getElementById('clAuditorModal');
+    if (m) m.style.display = 'none';
+  };
+  function _escHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function _fmtDT(ts){ try { return new Date(ts).toLocaleString(); } catch(_){ return ''; } }
+  function _sameDay(a,b){ const da=new Date(a), db=new Date(b); return da.getFullYear()===db.getFullYear()&&da.getMonth()===db.getMonth()&&da.getDate()===db.getDate(); }
+  function openAuditorView(unit){
+    const m = ensureAuditorModal();
+    document.getElementById('clAuditorTitle').innerHTML =
+      `<i class="fas ${unit.icon||'fa-cube'}" style="color:${unit.color||'#0284c7'};"></i> Auditor · ${_escHtml(unit.name)} <span style="opacity:.6;font-weight:400;font-size:.85rem;">(${_escHtml(unit.barcode)})</span>`;
+    const recs = loadRecs().filter(r => r && (r.unitId === unit.id || (r.barcode && unit.barcode && String(r.barcode).toLowerCase() === String(unit.barcode).toLowerCase())));
+    const today = Date.now();
+    const inspectedToday = recs.some(r => _sameDay(r.ts||0, today));
+    const lastRec = recs[0] || null;
+    const banner = inspectedToday
+      ? `<div style="padding:10px 14px;background:#dcfce7;color:#166534;border-radius:10px;font-weight:700;margin-bottom:12px;"><i class="fas fa-check-circle"></i> Inspected today — تم الفحص اليوم${lastRec?' · '+_escHtml(_fmtDT(lastRec.ts)):''}</div>`
+      : `<div style="padding:10px 14px;background:#fef3c7;color:#92400e;border-radius:10px;font-weight:700;margin-bottom:12px;"><i class="fas fa-exclamation-triangle"></i> Not inspected today — لم يتم الفحص اليوم</div>`;
+    const itemsHtml = (unit.items||[]).map((it,i)=>`<li style="padding:6px 0;border-bottom:1px dashed #e2e8f0;">${i+1}. ${_escHtml(it)}</li>`).join('') || '<li style="color:#94a3b8;">No items defined</li>';
+    // PERF: cap to 20 rows; long histories with embedded data were the main slowness.
+    const rowsHtml = recs.length
+      ? recs.slice(0,20).map(r=>{
+          const total=(r.items||[]).length;
+          const passed=(r.items||[]).filter(x=>x.ok).length;
+          const status = r.allPassed
+            ? '<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:999px;font-size:.75rem;font-weight:700;">Pass</span>'
+            : '<span style="background:#fee2e2;color:#991b1b;padding:2px 8px;border-radius:999px;font-size:.75rem;font-weight:700;">Issues</span>';
+          return `<tr>
+            <td style="padding:8px;border-bottom:1px solid #e2e8f0;">${_escHtml(_fmtDT(r.ts))}</td>
+            <td style="padding:8px;border-bottom:1px solid #e2e8f0;">${_escHtml(r.specialistNurse||'')}</td>
+            <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:center;">${passed}/${total}</td>
+            <td style="padding:8px;border-bottom:1px solid #e2e8f0;text-align:center;">${status}</td>
+          </tr>`;
+        }).join('')
+      : '<tr><td colspan="4" style="padding:14px;text-align:center;color:#94a3b8;">No inspections recorded yet.</td></tr>';
+    document.getElementById('clAuditorBody').innerHTML = `
+      ${banner}
+      <div style="display:grid;grid-template-columns:1fr;gap:16px;">
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;">
+          <div style="font-weight:700;color:#0f172a;margin-bottom:8px;"><i class="fas fa-list-check"></i> Checklist items — بنود الفحص</div>
+          <ul style="margin:0;padding-left:18px;color:#334155;font-size:.92rem;">${itemsHtml}</ul>
+        </div>
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;">
+          <div style="font-weight:700;color:#0f172a;margin-bottom:8px;"><i class="fas fa-history"></i> Inspection history — سجل الفحوصات</div>
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:.9rem;">
+              <thead>
+                <tr style="background:#e2e8f0;color:#0f172a;">
+                  <th style="padding:8px;text-align:left;">Date / التاريخ</th>
+                  <th style="padding:8px;text-align:left;">Inspector / الفاحص</th>
+                  <th style="padding:8px;text-align:center;">Items</th>
+                  <th style="padding:8px;text-align:center;">Result</th>
+                </tr>
+              </thead>
+              <tbody>${rowsHtml}</tbody>
+            </table>
+          </div>
+        </div>
+        <div style="font-size:.75rem;color:#94a3b8;text-align:center;">Read-only auditor mode · وضع المفتش للعرض فقط</div>
+      </div>`;
+    m.style.display = 'flex';
   }
   window.clSubmitManualBarcode = function(){
     const v = document.getElementById('clManualBarcode').value;
@@ -24992,7 +25514,7 @@ window.toggleInjuryPrintPreview = function(){
       return `<tr>
         <td>${r.unitName}</td>
         <td>${fmtDate(r.ts)}</td>
-        <td>${r.technician||'—'}</td>
+        <td>${r.specialistNurse||'—'}</td>
         <td>${st}</td>
         <td>${fails.length}</td>
         <td>
@@ -25011,7 +25533,7 @@ window.toggleInjuryPrintPreview = function(){
     }).join('');
     const html = `<div style="padding:6px;">
       <h3 style="margin:0 0 6px;">${r.unitName}</h3>
-      <div style="color:#64748b;font-size:0.9em;margin-bottom:4px;">${fmtDate(r.ts)} — Technician: <b>${r.technician}</b></div>
+      <div style="color:#64748b;font-size:0.9em;margin-bottom:4px;">${fmtDate(r.ts)} — Specialist Nurse: <b>${r.specialistNurse}</b></div>
       ${r.generalNotes?`<div style="margin:6px 0;padding:8px;background:#fef3c7;border-radius:6px;">Notes: ${r.generalNotes}</div>`:''}
       <ul class="cl-detail-list">${detail}</ul>
     </div>`;
@@ -25026,16 +25548,27 @@ window.toggleInjuryPrintPreview = function(){
   };
   window.clDeleteRec = function(id){
     if (!confirm('Delete this record?')) return;
+    const existing = loadRecs().find(r=>r && r.id===id);
+    addTombstone(id);
     saveRecs(loadRecs().filter(r=>r.id!==id));
+    // Drop any queued upload for this id so a pending write cannot resurrect it.
+    try {
+      if (Array.isArray(pendingRecs) && pendingRecs.length) {
+        for (let i = pendingRecs.length - 1; i >= 0; i--) {
+          if (pendingRecs[i] && pendingRecs[i].id === id) pendingRecs.splice(i, 1);
+        }
+      }
+    } catch(_){}
+    try { fbRemoveRec(id, existing && existing.barcode); } catch(_){}
     renderChecklistHistory();
     renderHub();
   };
   window.clExportHistoryCSV = function(){
     const recs = loadRecs();
-    const rows = [['ID','Unit','Barcode','Date','Technician','Status','FailedCount','GeneralNotes','FailedItems']];
+    const rows = [['ID','Unit','Barcode','Date','Specialist Nurse','Status','FailedCount','GeneralNotes','FailedItems']];
     recs.forEach(r=>{
       const fails = r.items.filter(i=>i.checked && !i.ok).map(i=>i.name+(i.notes?` (${i.notes})`:'')).join(' | ');
-      rows.push([r.id,r.unitName,r.barcode||'',new Date(r.ts).toISOString(),r.technician||'',r.allPassed?'PASS':'FAIL',
+      rows.push([r.id,r.unitName,r.barcode||'',new Date(r.ts).toISOString(),r.specialistNurse||'',r.allPassed?'PASS':'FAIL',
                  r.items.filter(i=>i.checked&&!i.ok).length, (r.generalNotes||'').replace(/[\r\n,]/g,' '), fails]);
     });
     const csv = rows.map(row=>row.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
@@ -25066,16 +25599,448 @@ window.toggleInjuryPrintPreview = function(){
 
   loadUnits();
 
-  // Auto-open inspection form when URL has ?checklist=BARCODE
-  (function autoOpenFromUrl(){
+  // URL entry-point: scanning a QR that encodes `?checklist=BARCODE` opens
+  // the page directly. Show the Inspector/Auditor role choice immediately so
+  // an auditor can view without logging in.
+  (function checklistUrlEntry(){
     try {
-      const params = new URLSearchParams(location.search);
+      const params = new URLSearchParams(window.location.search);
       const code = params.get('checklist');
       if (!code) return;
-      const trigger = () => { try { handleScannedCode(code); } catch(e){ console.warn(e); } };
-      if (document.readyState === 'complete') setTimeout(trigger, 400);
-      else window.addEventListener('load', () => setTimeout(trigger, 400), { once:true });
+      const openFor = ()=>{
+        const unit = loadUnits().find(u => (u.barcode||'').toLowerCase() === code.toLowerCase());
+        if (!unit) return;
+        showChecklistRoleChoice(unit);
+      };
+      if (document.readyState === 'complete') setTimeout(openFor, 300);
+      else window.addEventListener('load', ()=>setTimeout(openFor, 300));
+    } catch(_){}
+  })();
+
+
+  // One-time cleanup: drop inspection records without a valid unitId, and rescue records
+  // that only carry a barcode by resolving it back to a known unitId. Corrupt records
+  // (e.g. imported from an older schema) were the root cause of one inspection appearing
+  // to "mark" other checklists.
+  (function cleanupCorruptRecs(){
+    try {
+      const raw = localStorage.getItem(RECS_KEY);
+      if (!raw) return;
+      const recs = JSON.parse(raw);
+      if (!Array.isArray(recs) || !recs.length) return;
+      const cleaned = sanitizeInspectionList(recs);
+      const changed = cleaned.length !== recs.length || JSON.stringify(cleaned) !== JSON.stringify(recs);
+      if (changed) {
+        try { localStorage.setItem(RECS_KEY + '__backup_' + Date.now(), raw); } catch(_){}
+        localStorage.setItem(RECS_KEY, JSON.stringify(cleaned));
+        console.info('[checklist-cleanup] pruned', recs.length - cleaned.length, 'corrupt inspection record(s)');
+      }
+    } catch(e){ console.warn('[checklist-cleanup] failed', e); }
+  })();
+
+  // Backfill publicChecklists/* summaries so the no-login barcode view works even
+  // before any new inspection is saved on this device.
+  (function backfillPublicSummaries(){
+    function run(){
+      try {
+        const units = loadUnits();
+        const recs = loadRecs();
+        units.forEach(u => {
+          const last = lastRecFor(u.id, recs, u.barcode);
+          if (!last) return;
+          const summaryRec = Object.assign({}, last, { unitName: u.name, barcode: u.barcode });
+          try { fbUpsertPublicChecklist(summaryRec); } catch(_){}
+        });
+      } catch(_){}
+    }
+    // Wait a bit for Firebase auth to settle so writes succeed.
+    setTimeout(run, 4000);
+    setTimeout(run, 12000);
+  })();
+
+  // ===== Public read-only status view when URL has ?checklist=BARCODE =====
+  // Anyone (even signed-out visitors) sees whether the unit was inspected today.
+  // No editing, no form. Signed-in staff get an extra button to open the form.
+  (function publicChecklistStatus(){
+    let rawCode = null;
+    try {
+      const params = new URLSearchParams(location.search);
+      rawCode = params.get('checklist');
     } catch(e){}
+    if (!rawCode) return;
+
+    // Normalize: also accept a full URL pasted as the value.
+    let code = (rawCode || '').trim();
+    try {
+      const m = code.match(/[?&]checklist=([^&]+)/i);
+      if (m) code = decodeURIComponent(m[1]);
+    } catch(e){}
+
+    // Build overlay
+    const style = document.createElement('style');
+    style.textContent = `
+      #pubClOverlay{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;
+        background:linear-gradient(135deg,#0b1220 0%,#1e293b 100%);padding:16px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#0f172a;}
+      #pubClOverlay .pub-card{background:#fff;border-radius:18px;max-width:480px;width:100%;padding:22px 22px 18px;
+        box-shadow:0 30px 60px rgba(0,0,0,.4);animation:pubClIn .25s ease;}
+      @keyframes pubClIn{from{transform:translateY(12px);opacity:0}to{transform:translateY(0);opacity:1}}
+      #pubClOverlay .pub-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+      #pubClOverlay .pub-icon{width:54px;height:54px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+        font-size:26px;color:#fff;background:#334155;flex-shrink:0;}
+      #pubClOverlay .pub-title{font-size:1.15em;font-weight:700;color:#0f172a;line-height:1.2;}
+      #pubClOverlay .pub-sub{font-size:.82em;color:#64748b;margin-top:2px;}
+      #pubClOverlay .pub-badge{margin:12px 0 10px;padding:16px;border-radius:14px;text-align:center;font-weight:700;font-size:1.1em;
+        display:flex;flex-direction:column;align-items:center;gap:6px;}
+      #pubClOverlay .pub-badge.ok{background:#dcfce7;color:#166534;border:2px solid #22c55e;}
+      #pubClOverlay .pub-badge.no{background:#fee2e2;color:#991b1b;border:2px solid #ef4444;}
+      #pubClOverlay .pub-badge.wait{background:#f1f5f9;color:#475569;border:2px solid #cbd5e1;}
+      #pubClOverlay .pub-badge .big{font-size:1.6em;line-height:1;}
+      #pubClOverlay .pub-meta{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;font-size:.88em;color:#334155;line-height:1.5;}
+      #pubClOverlay .pub-meta b{color:#0f172a;}
+      #pubClOverlay .pub-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap;}
+      #pubClOverlay .pub-btn{border:none;border-radius:9px;padding:9px 14px;font-size:.9em;font-weight:600;cursor:pointer;
+        display:inline-flex;align-items:center;gap:6px;}
+      #pubClOverlay .pub-btn-ghost{background:#f1f5f9;color:#475569;}
+      #pubClOverlay .pub-btn-primary{background:#3b82f6;color:#fff;}
+      #pubClOverlay .pub-note{font-size:.75em;color:#94a3b8;text-align:center;margin-top:10px;}
+      #pubClOverlay .pub-card{max-height:calc(100vh - 32px);overflow-y:auto;}
+      #pubClOverlay .pub-section-title{font-size:.85em;font-weight:700;color:#0f172a;margin:14px 0 8px;display:flex;align-items:center;gap:6px;}
+      #pubClOverlay .pub-section-title .pub-count{background:#e2e8f0;color:#475569;padding:2px 8px;border-radius:999px;font-size:.85em;}
+      #pubClOverlay .pub-items{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;}
+      #pubClOverlay .pub-item{padding:9px 11px;border-radius:9px;display:flex;align-items:flex-start;gap:9px;font-size:.88em;line-height:1.4;border:1px solid transparent;}
+      #pubClOverlay .pub-item.ok{background:#f0fdf4;border-color:#bbf7d0;color:#14532d;}
+      #pubClOverlay .pub-item.fail{background:#fef2f2;border-color:#fecaca;color:#7f1d1d;}
+      #pubClOverlay .pub-item.skip{background:#f8fafc;border-color:#e2e8f0;color:#64748b;}
+      #pubClOverlay .pub-item .pub-mark{width:18px;height:18px;flex-shrink:0;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.7em;color:#fff;margin-top:1px;}
+      #pubClOverlay .pub-item.ok .pub-mark{background:#22c55e;}
+      #pubClOverlay .pub-item.fail .pub-mark{background:#ef4444;}
+      #pubClOverlay .pub-item.skip .pub-mark{background:#94a3b8;}
+      #pubClOverlay .pub-item .pub-item-body{flex:1;min-width:0;}
+      #pubClOverlay .pub-item .pub-item-name{font-weight:600;}
+      #pubClOverlay .pub-item .pub-item-note{margin-top:3px;font-size:.85em;color:#7f1d1d;background:rgba(255,255,255,.6);padding:4px 7px;border-radius:5px;}
+      #pubClOverlay .pub-item.ok .pub-item-note{color:#14532d;}
+      #pubClOverlay .pub-general-note{margin-top:10px;padding:10px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;font-size:.85em;color:#78350f;}
+      #pubClOverlay .pub-summary-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+      #pubClOverlay .pub-chip{padding:4px 10px;border-radius:999px;font-size:.78em;font-weight:600;display:inline-flex;align-items:center;gap:5px;}
+      #pubClOverlay .pub-chip.ok{background:#dcfce7;color:#166534;}
+      #pubClOverlay .pub-chip.fail{background:#fee2e2;color:#991b1b;}
+      #pubClOverlay .pub-chip.neutral{background:#f1f5f9;color:#475569;}
+      #pubClOverlay [dir="rtl"]{direction:rtl;}
+    `;
+    document.head.appendChild(style);
+
+    const overlay = document.createElement('div');
+    overlay.id = 'pubClOverlay';
+    overlay.innerHTML = `
+      <div class="pub-card" role="dialog" aria-live="polite">
+        <div class="pub-head">
+          <div class="pub-icon" id="pubClIcon"><i class="fas fa-clipboard-check"></i></div>
+          <div>
+            <div class="pub-title" id="pubClTitle">Checklist status</div>
+            <div class="pub-sub" id="pubClSub">Barcode: <b>${escapeHtml(code)}</b></div>
+          </div>
+        </div>
+        <div class="pub-badge wait" id="pubClBadge">
+          <div class="big"><i class="fas fa-spinner fa-spin"></i></div>
+          <div>Checking latest inspection…</div>
+        </div>
+        <div class="pub-meta" id="pubClMeta" style="display:none;"></div>
+        <div id="pubClDetails" style="display:none;"></div>
+        <div class="pub-actions">
+          <button type="button" class="pub-btn pub-btn-ghost" id="pubClClose"><i class="fas fa-times"></i> Close</button>
+          <button type="button" class="pub-btn pub-btn-primary" id="pubClOpenForm" style="display:none;">
+            <i class="fas fa-clipboard-list"></i> Open inspection form
+          </button>
+        </div>
+        <div class="pub-note">Read-only public view · No changes can be made here.</div>
+      </div>
+    `;
+
+    function escapeHtml(s){
+      return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function mount(){
+      if (document.getElementById('pubClOverlay')) return;
+      document.body.appendChild(overlay);
+      document.getElementById('pubClClose').onclick = () => {
+        overlay.remove();
+        // Clean URL so a subsequent refresh doesn't re-open the overlay.
+        try { history.replaceState(null,'', location.pathname + location.hash); } catch(e){}
+      };
+    }
+    if (document.body) mount();
+    else document.addEventListener('DOMContentLoaded', mount, { once:true });
+
+    function fmtDateTime(ts){
+      try { return new Date(ts).toLocaleString(); } catch(e){ return String(ts); }
+    }
+    function isSameLocalDay(ts, now){
+      const d = new Date(ts), n = now || new Date();
+      return d.getFullYear()===n.getFullYear() && d.getMonth()===n.getMonth() && d.getDate()===n.getDate();
+    }
+
+    function render(unit, latest, todayRec){
+      const badge = document.getElementById('pubClBadge');
+      const meta  = document.getElementById('pubClMeta');
+      const title = document.getElementById('pubClTitle');
+      const icon  = document.getElementById('pubClIcon');
+      if (unit){
+        title.textContent = unit.name || 'Checklist';
+        if (unit.color) icon.style.background = unit.color;
+        if (unit.icon)  icon.innerHTML = `<i class="fas ${unit.icon}"></i>`;
+      }
+      if (todayRec){
+        badge.className = 'pub-badge ok';
+        badge.innerHTML = `
+          <div class="big"><i class="fas fa-circle-check"></i></div>
+          <div>Inspected today ${todayRec.allPassed?'· ✓ Pass':'· ⚠ Issues logged'}</div>
+        `;
+      } else {
+        badge.className = 'pub-badge no';
+        badge.innerHTML = `
+          <div class="big"><i class="fas fa-triangle-exclamation"></i></div>
+          <div>Not inspected today</div>
+        `;
+      }
+      const parts = [];
+      if (todayRec){
+        parts.push(`<div><b>Today's inspection:</b> ${escapeHtml(fmtDateTime(todayRec.ts))}</div>`);
+        if (todayRec.specialistNurse) parts.push(`<div><b>Specialist Nurse:</b> ${escapeHtml(todayRec.specialistNurse)}</div>`);
+      } else if (latest){
+        parts.push(`<div><b>Last inspection:</b> ${escapeHtml(fmtDateTime(latest.ts))}</div>`);
+        if (latest.specialistNurse) parts.push(`<div><b>Specialist Nurse:</b> ${escapeHtml(latest.specialistNurse)}</div>`);
+        parts.push(`<div><b>Result:</b> ${latest.allPassed?'✓ All items passed':'⚠ Issues reported'}</div>`);
+      } else {
+        parts.push(`<div>No previous inspections found for this unit.</div>`);
+      }
+      meta.style.display = '';
+      meta.innerHTML = parts.join('');
+
+      // Render the detailed items list (when available).
+      const details = document.getElementById('pubClDetails');
+      if (details){
+        const source = todayRec || latest;
+        const items = source && Array.isArray(source.items) ? source.items : [];
+        const generalNotes = source && source.generalNotes ? String(source.generalNotes) : '';
+        if (items.length){
+          const passCount = items.filter(i => i && i.ok).length;
+          const failCount = items.filter(i => i && i.checked && !i.ok).length;
+          const skipCount = items.length - passCount - failCount;
+          const chips = [];
+          chips.push(`<span class="pub-chip ok"><i class="fas fa-check"></i> ${passCount} Pass</span>`);
+          if (failCount) chips.push(`<span class="pub-chip fail"><i class="fas fa-xmark"></i> ${failCount} Fail</span>`);
+          if (skipCount) chips.push(`<span class="pub-chip neutral"><i class="fas fa-minus"></i> ${skipCount} Skipped</span>`);
+          const rows = items.map(it => {
+            const name = escapeHtml((it && it.name) || 'Item');
+            const note = it && it.notes ? `<div class="pub-item-note"><i class="fas fa-comment-dots"></i> ${escapeHtml(it.notes)}</div>` : '';
+            let cls = 'skip', icon = '<i class="fas fa-minus"></i>';
+            if (it && it.ok) { cls = 'ok'; icon = '<i class="fas fa-check"></i>'; }
+            else if (it && it.checked) { cls = 'fail'; icon = '<i class="fas fa-xmark"></i>'; }
+            return `<li class="pub-item ${cls}">
+              <span class="pub-mark">${icon}</span>
+              <div class="pub-item-body">
+                <div class="pub-item-name">${name}</div>
+                ${note}
+              </div>
+            </li>`;
+          }).join('');
+          details.innerHTML = `
+            <div class="pub-summary-row">${chips.join('')}</div>
+            <div class="pub-section-title"><i class="fas fa-list-check"></i> Checklist items <span class="pub-count">${items.length}</span></div>
+            <ul class="pub-items">${rows}</ul>
+            ${generalNotes ? `<div class="pub-general-note"><b><i class="fas fa-note-sticky"></i> Notes:</b> ${escapeHtml(generalNotes)}</div>` : ''}
+          `;
+          details.style.display = '';
+        } else {
+          details.style.display = 'none';
+          details.innerHTML = '';
+        }
+      }
+
+      // Show "Open inspection form" only for signed-in users.
+      try {
+        const signedIn = (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser);
+        const btn = document.getElementById('pubClOpenForm');
+        if (signedIn && unit){
+          btn.style.display = '';
+          btn.onclick = () => {
+            overlay.remove();
+            try { handleScannedCode(unit.barcode || code); } catch(e){}
+          };
+        }
+      } catch(e){}
+    }
+
+    function renderError(msg){
+      const badge = document.getElementById('pubClBadge');
+      const meta  = document.getElementById('pubClMeta');
+      badge.className = 'pub-badge wait';
+      badge.innerHTML = `
+        <div class="big"><i class="fas fa-circle-question"></i></div>
+        <div>Status unavailable</div>
+      `;
+      meta.style.display = '';
+      meta.innerHTML = `<div>${escapeHtml(msg)}</div>`;
+    }
+
+    function renderUnknown(){
+      const badge = document.getElementById('pubClBadge');
+      const meta  = document.getElementById('pubClMeta');
+      badge.className = 'pub-badge no';
+      badge.innerHTML = `
+        <div class="big"><i class="fas fa-barcode"></i></div>
+        <div>Unknown barcode</div>
+      `;
+      meta.style.display = '';
+      meta.innerHTML = `<div>No checklist unit matches barcode <b>${escapeHtml(code)}</b>.</div>`;
+    }
+
+    function findUnit(unitsObj){
+      if (!unitsObj) return null;
+      const arr = Array.isArray(unitsObj) ? unitsObj : Object.values(unitsObj);
+      const target = code.toLowerCase();
+      return arr.find(u => u && u.barcode && String(u.barcode).toLowerCase() === target) || null;
+    }
+    function pickLatest(recsObj, unitId){
+      if (!recsObj) return null;
+      const arr = Array.isArray(recsObj) ? recsObj : Object.values(recsObj);
+      let latest = null;
+      arr.forEach(r => {
+        if (!r || r.unitId !== unitId) return;
+        if (!latest || (r.ts||0) > (latest.ts||0)) latest = r;
+      });
+      return latest;
+    }
+    function findToday(recsObj, unitId){
+      if (!recsObj) return null;
+      const arr = Array.isArray(recsObj) ? recsObj : Object.values(recsObj);
+      const now = new Date();
+      let best = null;
+      arr.forEach(r => {
+        if (!r || r.unitId !== unitId || !r.ts) return;
+        if (!isSameLocalDay(r.ts, now)) return;
+        if (!best || r.ts > best.ts) best = r;
+      });
+      return best;
+    }
+
+    // Try Firebase first; fall back to local storage (for the same device that saved it).
+    function withLocalFallback(){
+      try {
+        const units = JSON.parse(localStorage.getItem('ymco_checklist_units_v2') || '[]');
+        const recs  = JSON.parse(localStorage.getItem('ymco_checklist_inspections_v1') || '[]');
+        const unit = findUnit(units);
+        if (!unit){ renderUnknown(); return true; }
+        render(unit, pickLatest(recs, unit.id), findToday(recs, unit.id));
+        return true;
+      } catch(e){ return false; }
+    }
+
+    function encodePubKey(v){
+      return String(v == null ? '' : v).replace(/[.#$\[\]\/]/g, '_');
+    }
+
+    function renderFromPublicSummary(summary){
+      // publicChecklists summary is read-only and contains only safe fields.
+      const unit = {
+        name: summary.unitName || 'Checklist',
+        barcode: summary.barcode || code,
+        icon: 'fa-clipboard-check',
+        color: '#334155',
+        id: summary.unitId || null
+      };
+      const latest = {
+        ts: Number(summary.lastTs) || 0,
+        specialistNurse: summary.specialistNurse || '',
+        allPassed: (summary.status === 'pass'),
+        items: Array.isArray(summary.items) ? summary.items : [],
+        generalNotes: summary.generalNotes || ''
+      };
+      const isToday = latest.ts && isSameLocalDay(latest.ts, new Date());
+      render(unit, latest.ts ? latest : null, isToday ? latest : null);
+    }
+
+    function tryFirebase(attempt){
+      attempt = attempt || 0;
+      if (typeof firebase === 'undefined' || !firebase.database){
+        if (attempt < 40) return setTimeout(()=>tryFirebase(attempt+1), 150);
+        if (!withLocalFallback()) renderError('Cannot reach the server. Please check your connection.');
+        return;
+      }
+      let dbRef;
+      try { dbRef = firebase.database(); } catch(e){
+        if (!withLocalFallback()) renderError('Cannot connect to database.');
+        return;
+      }
+
+      const pubKey = encodePubKey(code);
+      // 1) Try the public summary path first — readable without sign-in.
+      dbRef.ref('publicChecklists/' + pubKey).get().then(snap => {
+        if (snap && snap.exists()){
+          const val = snap.val();
+          if (val && (val.barcode || val.unitName)){
+            renderFromPublicSummary(val);
+            // For signed-in users, also try the protected paths to enrich the "Open form" button.
+            const signedIn = (firebase.auth && firebase.auth().currentUser);
+            if (signedIn){
+              dbRef.ref('checklists/units').get().then(uSnap => {
+                const unitsVal = uSnap && uSnap.exists() ? uSnap.val() : null;
+                const unit = findUnit(unitsVal);
+                if (unit){
+                  const btn = document.getElementById('pubClOpenForm');
+                  if (btn){
+                    btn.style.display = '';
+                    btn.onclick = () => {
+                      overlay.remove();
+                      try { handleScannedCode(unit.barcode || code); } catch(e){}
+                    };
+                  }
+                }
+              }).catch(()=>{});
+            }
+            return;
+          }
+        }
+        // 2) No public summary. Fall back to protected paths (works only if signed in / rules allow).
+        Promise.all([
+          dbRef.ref('checklists/units').get().catch(()=>null),
+          dbRef.ref('checklists/inspections_by_id').get().catch(()=>null),
+          dbRef.ref('checklists/inspections').get().catch(()=>null),
+        ]).then(([uSnap, rSnap, rSnap2]) => {
+          const unitsVal = uSnap && uSnap.exists() ? uSnap.val() : null;
+          const recsVal  = (rSnap && rSnap.exists() ? rSnap.val() : null)
+                        || (rSnap2 && rSnap2.exists() ? rSnap2.val() : null);
+          if (!unitsVal){
+            if (!withLocalFallback()){
+              // No cloud data + no local data. Show a friendly "not inspected yet" state.
+              render({ name: 'Checklist', barcode: code, icon: 'fa-clipboard-check', color: '#334155' }, null, null);
+            }
+            return;
+          }
+          const unit = findUnit(unitsVal);
+          if (!unit){ renderUnknown(); return; }
+          render(unit, pickLatest(recsVal, unit.id), findToday(recsVal, unit.id));
+        }).catch(err => {
+          console.warn('public checklist status read failed', err);
+          if (!withLocalFallback()){
+            render({ name: 'Checklist', barcode: code, icon: 'fa-clipboard-check', color: '#334155' }, null, null);
+          }
+        });
+      }).catch(err => {
+        console.warn('publicChecklists read failed', err);
+        if (!withLocalFallback()){
+          render({ name: 'Checklist', barcode: code, icon: 'fa-clipboard-check', color: '#334155' }, null, null);
+        }
+      });
+    }
+
+    // Kick off after DOM is available.
+    if (document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', ()=>tryFirebase(0), { once:true });
+    } else {
+      tryFirebase(0);
+    }
   })();
 })();
 </script>
