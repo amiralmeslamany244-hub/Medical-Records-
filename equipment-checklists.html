@@ -535,9 +535,17 @@
   }
   function fbWarn(scope, e){
     console.warn('[checklist-sync]', scope, e);
-    if (isPermissionError(e)) {
-      fbToast('Checklist sync blocked by Firebase rules ('+scope+'). Data is still saved locally.', 'warning');
+    // Silent on permission errors — the user-scoped fallback path handles them.
+  }
+  // Map any legacy shared path `checklists/...` to the user-scoped path
+  // `users/<uid>/checklists/...` so we never hit the shared-rules block.
+  function fbResolve(path){
+    if (typeof path !== 'string') return path;
+    if (path.indexOf('checklists/') === 0) {
+      const b = fbUserBase();
+      if (b) return b + '/' + path.slice('checklists/'.length);
     }
+    return path;
   }
   function queueWaitingToast(){
     if (fbWaitingToastShown) return;
@@ -547,9 +555,10 @@
   async function fbSetWithFallback(path, value, scope){
     const db = fbDb();
     if (!db || !window.firebaseRef || !window.firebaseSet) throw new Error('Firebase database is not ready');
+    const resolved = fbResolve(path);
     try {
-      await window.firebaseSet(window.firebaseRef(db, path), value);
-      return { path, fallback:false };
+      await window.firebaseSet(window.firebaseRef(db, resolved), value);
+      return { path: resolved, fallback: resolved !== path };
     } catch(e){
       // Some existing Firebase rules allow writing only inside users/<uid>.
       // If the shared checklists/* path is blocked, still persist the inspection under the signed-in user.
@@ -747,17 +756,9 @@
   function attachValue(path, cb, scope){
     try {
       const db = fbDb(); if (!db || !window.firebaseRef || !window.firebaseOnValue) return;
-      window.firebaseOnValue(window.firebaseRef(db, path), cb, function(err){
+      const resolved = fbResolve(path);
+      window.firebaseOnValue(window.firebaseRef(db, resolved), cb, function(err){
         fbWarn(scope + '-sub', err);
-        if (isPermissionError(err) && path.indexOf('checklists/') === 0) {
-          const base = fbUserBase();
-          if (!base) return;
-          const fallbackPath = base + '/' + path.slice('checklists/'.length);
-          if (fbAttachedFallbacks.has(fallbackPath)) return;
-          fbAttachedFallbacks.add(fallbackPath);
-          console.info('[checklist-sync] attaching fallback listener', fallbackPath);
-          attachValue(fallbackPath, cb, scope + '-fallback');
-        }
       });
     } catch(e){ fbWarn(scope + '-sub', e); }
   }
@@ -792,7 +793,7 @@
 
     // Seed remote units if missing. If shared path is blocked, fallback writer handles users/<uid>/checklists/units.
     try {
-      window.firebaseGet(window.firebaseRef(db, FB_UNITS_PATH)).then(snap=>{
+      window.firebaseGet(window.firebaseRef(db, fbResolve(FB_UNITS_PATH))).then(snap=>{
         if (!snap || !snap.exists()) fbPushUnits(loadUnits());
       }).catch(e=>{
         if (isPermissionError(e)) fbPushUnits(loadUnits());
