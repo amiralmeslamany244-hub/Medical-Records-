@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <meta name="theme-color" content="#0b1220" />
+  <title>Fast Checklist</title>
+
+  <!-- Preconnect to speed up first byte -->
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="dns-prefetch" href="https://firebaseio.com" />
+
+  <link rel="stylesheet" href="/fast-checklist/fast-checklist.css" />
+
+  <!-- Barcode scanner (loaded with defer, ~60KB gzipped) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1>Fast Checklist</h1>
+    <span id="net-badge" class="badge" hidden>Offline</span>
+  </header>
+
+  <main id="app">
+    <!-- Scan screen -->
+    <section id="scan-screen" class="screen">
+      <button id="btn-start" class="btn btn-primary btn-lg">ابدأ المسح</button>
+      <div id="reader" class="reader" hidden></div>
+      <button id="btn-stop" class="btn btn-ghost" hidden>إيقاف</button>
+      <p id="scan-hint" class="hint">وجّه الكاميرا نحو الباركود</p>
+    </section>
+
+    <!-- Checklist screen -->
+    <section id="checklist-screen" class="screen" hidden>
+      <div class="checklist-header">
+        <button id="btn-back" class="btn btn-ghost">رجوع</button>
+        <div class="meta">
+          <div id="cl-title" class="cl-title">—</div>
+          <div id="cl-barcode" class="cl-barcode"></div>
+        </div>
+      </div>
+      <ul id="cl-items" class="items"></ul>
+      <div class="save-bar">
+        <span id="cl-progress" class="progress">0 / 0</span>
+        <button id="btn-save" class="btn btn-primary">حفظ</button>
+      </div>
+    </section>
+
+    <!-- Loader -->
+    <div id="loader" class="loader" hidden><div class="spinner"></div></div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast" hidden></div>
+  </main>
+
+  <!-- App logic (modular Firebase inside) -->
+  <script type="module" src="/fast-checklist/checklist.js"></script>
+</body>
+</html>
