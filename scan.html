@@ -4,35 +4,28 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b1220">
-<title>Checklists Hub — YMCO Medical</title>
+<title>Scan Barcode — YMCO Checklists</title>
 <link rel="icon" href="favicon.ico">
 <style>
   html,body{margin:0;padding:0;height:100%;background:#0b1220;color:#e2e8f0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
   .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;padding:24px;text-align:center;}
-  .spinner{width:44px;height:44px;border:3px solid rgba(255,255,255,.15);border-top-color:#f59e0b;border-radius:50%;animation:spin 1s linear infinite;}
+  .spinner{width:44px;height:44px;border:3px solid rgba(255,255,255,.15);border-top-color:#38bdf8;border-radius:50%;animation:spin 1s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
   h1{font-size:1.1rem;margin:0;font-weight:600;letter-spacing:.3px;}
   p{margin:0;color:#94a3b8;font-size:.9rem;}
-  a{color:#f59e0b;text-decoration:none;font-size:.85rem;}
+  a{color:#38bdf8;text-decoration:none;font-size:.85rem;}
 </style>
 <script>
-  // Preserve any incoming params (e.g. ?code=XYZ from a scanned QR)
-  (function(){
-    var qs = location.search || '';
-    var extra = qs ? (qs + '&hub=1') : '?hub=1';
-    // If a code is provided, we don't need hub=1 (auto-open handles it)
-    if (/[?&]code=/.test(qs)) extra = qs;
-    else if (/[?&]scan=1/.test(qs)) extra = qs;
-    location.replace('index.html' + extra);
-  })();
+  // Jump straight into the barcode scanner
+  location.replace('index.html?scan=1');
 </script>
 </head>
 <body>
   <div class="wrap">
     <div class="spinner"></div>
-    <h1><i class="fa fa-clipboard-check"></i> Opening Checklists Hub…</h1>
-    <p>Loading equipment checklists module.</p>
-    <a href="index.html">Back to main app</a>
+    <h1>Opening camera scanner…</h1>
+    <p>Point your camera at the unit barcode.</p>
+    <a href="index.html">Cancel</a>
   </div>
 </body>
 </html>
