@@ -6248,7 +6248,7 @@ body.splash-active{overflow:hidden;}
   }
   #auth-overlay.hidden{ display:none !important; }
   body.auth-locked{ overflow:hidden; }
-  body.auth-locked > *:not(#auth-overlay):not(#ertOverlay):not(#clRoleChoiceModal):not(#clAuditorModal):not(#checklistScanModal):not(#clSavedRoleHint):not(script):not(style){ filter: blur(6px); pointer-events:none; user-select:none; } body.auth-locked.ert-standalone-page > *{ filter:none !important; pointer-events:auto !important; user-select:auto !important; }
+  body.auth-locked > *:not(#auth-overlay):not(#ertOverlay):not(script):not(style){ filter: blur(6px); pointer-events:none; user-select:none; } body.auth-locked.ert-standalone-page > *{ filter:none !important; pointer-events:auto !important; user-select:auto !important; }
 
   /* ---- Left decorative panel ---- */
   .auth-hero{
@@ -6669,62 +6669,6 @@ body.splash-active{overflow:hidden;}
 </style>
 
 <!-- ===== AUTH: Login overlay ===== -->
-<script>
-  // Pre-hide the login overlay if there's any hint of a persisted Firebase session
-  // (localStorage OR IndexedDB OR firebase auth cookie). Also inject a safety timeout:
-  // don't visibly show the login overlay for ~1800ms — Firebase compat sometimes takes
-  // 500-1500ms to restore the session (especially after PWA/tab navigation from
-  // checklists.html or scan.html). If onAuthStateChanged fires with a user in that
-  // window, lockUI is never triggered visibly. If no user, overlay appears normally.
-  (function(){
-    try {
-      var hasSession = false;
-      // 1) localStorage (compat SDK default persistence for email/password)
-      try {
-        for (var i = 0; i < localStorage.length; i++) {
-          var k = localStorage.key(i);
-          if (k && k.indexOf('firebase:authUser:') === 0) { hasSession = true; break; }
-        }
-      } catch(_){}
-      // 2) IndexedDB persistence (used for Google popup / some PWA contexts)
-      if (!hasSession) {
-        try {
-          if (window.indexedDB && indexedDB.databases) {
-            // Async best-effort: if the DB exists, activate cached class late.
-            indexedDB.databases().then(function(list){
-              if (!list) return;
-              for (var j=0; j<list.length; j++){
-                var n = list[j] && list[j].name;
-                if (n && (n === 'firebaseLocalStorageDb' || n.indexOf('firebase') === 0)){
-                  document.documentElement.classList.add('ymco-auth-cached');
-                  break;
-                }
-              }
-            }).catch(function(){});
-          }
-        } catch(_){}
-      }
-      // 3) Cookies fallback
-      if (!hasSession) {
-        try {
-          var c = document.cookie || '';
-          if (c.indexOf('firebaseauth') !== -1 || c.indexOf('__session') !== -1) hasSession = true;
-        } catch(_){}
-      }
-
-      // Always inject the cached-hide style so the class can toggle overlay off.
-      document.write('<style id="ymco-auth-cached-style">html.ymco-auth-cached #auth-overlay{display:none !important;}html.ymco-auth-cached body{overflow:auto !important;}html.ymco-auth-pending #auth-overlay{display:none !important;}html.ymco-auth-pending body{overflow:auto !important;}</style>');
-      if (hasSession) document.documentElement.classList.add('ymco-auth-cached');
-
-      // Safety timeout: mark as "pending" for 1800ms so overlay stays hidden while
-      // Firebase restores the session in the background. Removed automatically.
-      document.documentElement.classList.add('ymco-auth-pending');
-      setTimeout(function(){
-        try { document.documentElement.classList.remove('ymco-auth-pending'); } catch(_){}
-      }, 1800);
-    } catch(_){}
-  })();
-</script>
 <div id="auth-overlay">
   <aside class="auth-hero" aria-hidden="true">
     <div class="auth-hero-top">
@@ -7335,7 +7279,7 @@ window.YMCO_showSplash = function(){
                 <div class="qa-group" id="qaGroupChecklists">
                     <span class="qa-group-label"><i class="fas fa-clipboard-check"></i> Checklists</span>
                     <div class="qa-group-row">
-                        <a class="qa-btn i-amber" href="checklists.html" title="Open Checklists Hub (standalone page)" style="text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;"><i class="fas fa-clipboard-check"></i> Open Checklists Hub</a>
+                        <button class="qa-btn i-amber" onclick="openChecklistsHub()" title="Open Checklists Hub"><i class="fas fa-clipboard-check"></i> Open Checklists Hub</button>
                         <button class="qa-btn i-sky" onclick="openChecklistScanner()" title="Scan unit barcode to open checklist"><i class="fas fa-qrcode"></i> Scan Barcode</button>
                     </div>
                 </div>
@@ -19249,7 +19193,6 @@ window.toggleInjuryPrintPreview = function(){
 
   function lockUI(){
     try { if (new URLSearchParams(location.search).get('page') === 'medical-tracking') return; } catch(_){ }
-    document.documentElement.classList.remove('ymco-auth-cached');
     overlay.classList.remove('hidden');
     document.body.classList.add('auth-locked');
     widget.classList.remove('show');
@@ -25287,6 +25230,8 @@ window.toggleInjuryPrintPreview = function(){
     document.getElementById('clManualBarcode').value = '';
     window.updateChecklistsGroupActive();
     __clRenderSavedRoleHint();
+    // PERF: pre-create role-choice modal so first paint after scan is instant.
+    try { ensureRoleChoiceModal(); } catch(_){}
     requestAnimationFrame(async ()=>{
       const reader = document.getElementById('clScanReader');
       if (!reader) return;
@@ -25362,7 +25307,23 @@ window.toggleInjuryPrintPreview = function(){
           .catch(()=>{});
       } catch(_){}
     }
-    if (reader) reader.innerHTML = '';
+    if (reader) {
+      // PERF: stop live MediaStream tracks synchronously and drop <video>
+      // from the DOM BEFORE the next modal paints. html5-qrcode's own stop()
+      // can take 500-1500ms on mobile; we don't wait for it.
+      try {
+        reader.querySelectorAll('video').forEach(v => {
+          try {
+            const st = v.srcObject;
+            if (st && st.getTracks) st.getTracks().forEach(t => { try { t.stop(); } catch(_){} });
+          } catch(_){}
+          try { v.srcObject = null; } catch(_){}
+          try { v.pause(); } catch(_){}
+          try { v.remove(); } catch(_){}
+        });
+      } catch(_){}
+      reader.innerHTML = '';
+    }
   }
   window.closeChecklistScanner = function(){
     document.getElementById('checklistScanModal').classList.remove('show');
@@ -25391,7 +25352,7 @@ window.toggleInjuryPrintPreview = function(){
     setTimeout(()=>{ __scanBusy = false; }, 800);
     // Defer role-choice modal to next frame so the browser can finish the
     // scan-modal removal + video teardown before painting the new modal.
-    requestAnimationFrame(()=> showChecklistRoleChoice(unit));
+    showChecklistRoleChoice(unit);
   }
 
   // ============ ROLE CHOICE (Inspector vs Auditor) ============
@@ -25435,7 +25396,7 @@ window.toggleInjuryPrintPreview = function(){
     if (m) return m;
     m = document.createElement('div');
     m.id = 'clRoleChoiceModal';
-    m.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.75);z-index:1000010;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px);';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.75);z-index:1000010;display:none;align-items:center;justify-content:center;padding:20px;';
     m.innerHTML = `
       <div style="background:#fff;border-radius:16px;max-width:520px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.35);">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
@@ -25515,10 +25476,6 @@ window.toggleInjuryPrintPreview = function(){
       closeChecklistRoleChoice();
       openAuditorView(unit);
     };
-    // Safety belt: if auth-locked is still applied (e.g. Firebase hasn't resolved yet
-    // after navigation from checklists.html), remove it so the role modal isn't blurred.
-    // The user reached this point via a successful scan, so the UI must be interactive.
-    try { document.body.classList.remove('auth-locked'); document.documentElement.classList.add('ymco-auth-cached'); } catch(_){}
     m.style.display = 'flex';
   }
 
@@ -25528,7 +25485,7 @@ window.toggleInjuryPrintPreview = function(){
     if (m) return m;
     m = document.createElement('div');
     m.id = 'clAuditorModal';
-    m.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.75);z-index:1000011;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;backdrop-filter:blur(6px);';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.75);z-index:1000011;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
     m.innerHTML = `
       <div style="background:#fff;border-radius:16px;max-width:820px;width:100%;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.35);margin:20px 0;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;">
@@ -26252,77 +26209,6 @@ window.toggleInjuryPrintPreview = function(){
 </script>
 <!-- ================== END CHECKLISTS MODULE ================== -->
 
-
-<!-- ===== Auto-open Checklists Hub / Scanner via URL params (added by extraction) ===== -->
-<script>
-(function(){
-  try {
-    var params = new URLSearchParams(location.search);
-    var wantHub  = params.get('hub')  === '1' || params.get('checklists') === '1';
-    var wantScan = params.get('scan') === '1';
-    var code     = params.get('code');
-    if (!wantHub && !wantScan && !code) return;
-
-    function waitFor(cond, cb, tries){
-      tries = tries || 200;
-      if (cond()) return cb();
-      if (tries <= 0) return;
-      setTimeout(function(){ waitFor(cond, cb, tries - 1); }, 150);
-    }
-    // Wait until Firebase Auth has FIRED at least once (so we know whether a session
-    // exists), not just until currentUser is truthy. Otherwise scan.html / checklists.html
-    // navigations can hang here for up to 30s if Auth resolves as "no user" — which is a
-    // legitimate state that should stop the auto-open, not stall it forever.
-    var __authResolved = false, __authUser = null;
-    try {
-      if (window.firebase && firebase.auth) {
-        var __unsub = firebase.auth().onAuthStateChanged(function(u){
-          __authResolved = true; __authUser = u || null;
-          try { __unsub && __unsub(); } catch(_){}
-        });
-      } else {
-        __authResolved = true; // no firebase — behave as before
-      }
-    } catch(_){ __authResolved = true; }
-    function ready(){
-      if (!__authResolved) return false;
-      if (!__authUser) return true; // resolved but not logged-in → let cb bail early
-      var readyFn = window.__checklistsReady;
-      return typeof window.openChecklistsHub === 'function'
-             && (typeof readyFn !== 'function' || readyFn());
-    }
-    document.addEventListener('DOMContentLoaded', function(){
-      waitFor(ready, function(){
-        // Auth resolved but user is not logged in → skip auto-open so the login
-        // overlay can appear normally instead of firing hub actions in the background.
-        if (!__authUser) {
-          try { history.replaceState({}, '', location.pathname); } catch(_){}
-          return;
-        }
-        try {
-          if (code) {
-            window.openChecklistsHub();
-            setTimeout(function(){
-              try {
-                var input = document.getElementById('clManualBarcode');
-                if (input) { input.value = code; }
-                if (typeof window.clSubmitManualBarcode === 'function') window.clSubmitManualBarcode();
-              } catch(_){}
-            }, 300);
-          } else if (wantScan && typeof window.openChecklistScanner === 'function') {
-            window.openChecklistsHub();
-            setTimeout(function(){ try { window.openChecklistScanner(); } catch(_){} }, 250);
-          } else {
-            window.openChecklistsHub();
-          }
-        } catch(e){ console.warn('auto-open checklists failed', e); }
-        // Clean URL so refresh doesn't loop the action
-        try { history.replaceState({}, '', location.pathname); } catch(_){}
-      });
-    });
-  } catch(e){ console.warn(e); }
-})();
-</script>
 </body>
 </html>
 
