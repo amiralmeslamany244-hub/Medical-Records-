@@ -6248,7 +6248,7 @@ body.splash-active{overflow:hidden;}
   }
   #auth-overlay.hidden{ display:none !important; }
   body.auth-locked{ overflow:hidden; }
-  body.auth-locked > *:not(#auth-overlay):not(#ertOverlay):not(script):not(style){ filter: blur(6px); pointer-events:none; user-select:none; } body.auth-locked.ert-standalone-page > *{ filter:none !important; pointer-events:auto !important; user-select:auto !important; }
+  body.auth-locked > *:not(#auth-overlay):not(#ertOverlay):not(#clRoleChoiceModal):not(#clAuditorModal):not(#checklistScanModal):not(#clSavedRoleHint):not(script):not(style){ filter: blur(6px); pointer-events:none; user-select:none; } body.auth-locked.ert-standalone-page > *{ filter:none !important; pointer-events:auto !important; user-select:auto !important; }
 
   /* ---- Left decorative panel ---- */
   .auth-hero{
@@ -6670,19 +6670,58 @@ body.splash-active{overflow:hidden;}
 
 <!-- ===== AUTH: Login overlay ===== -->
 <script>
-  // Pre-hide the login overlay if Firebase already has a persisted session in localStorage.
-  // Avoids flashing the login screen on every navigation (e.g. returning from checklists.html).
-  // If Firebase later reports no user, lockUI() removes the ymco-auth-cached class to re-show it.
+  // Pre-hide the login overlay if there's any hint of a persisted Firebase session
+  // (localStorage OR IndexedDB OR firebase auth cookie). Also inject a safety timeout:
+  // don't visibly show the login overlay for ~1800ms — Firebase compat sometimes takes
+  // 500-1500ms to restore the session (especially after PWA/tab navigation from
+  // checklists.html or scan.html). If onAuthStateChanged fires with a user in that
+  // window, lockUI is never triggered visibly. If no user, overlay appears normally.
   (function(){
     try {
-      for (var i = 0; i < localStorage.length; i++) {
-        var k = localStorage.key(i);
-        if (k && k.indexOf('firebase:authUser:') === 0) {
-          document.write('<style id="ymco-auth-cached-style">html.ymco-auth-cached #auth-overlay{display:none !important;}html.ymco-auth-cached body{overflow:auto !important;}</style>');
-          document.documentElement.classList.add('ymco-auth-cached');
-          break;
+      var hasSession = false;
+      // 1) localStorage (compat SDK default persistence for email/password)
+      try {
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          if (k && k.indexOf('firebase:authUser:') === 0) { hasSession = true; break; }
         }
+      } catch(_){}
+      // 2) IndexedDB persistence (used for Google popup / some PWA contexts)
+      if (!hasSession) {
+        try {
+          if (window.indexedDB && indexedDB.databases) {
+            // Async best-effort: if the DB exists, activate cached class late.
+            indexedDB.databases().then(function(list){
+              if (!list) return;
+              for (var j=0; j<list.length; j++){
+                var n = list[j] && list[j].name;
+                if (n && (n === 'firebaseLocalStorageDb' || n.indexOf('firebase') === 0)){
+                  document.documentElement.classList.add('ymco-auth-cached');
+                  break;
+                }
+              }
+            }).catch(function(){});
+          }
+        } catch(_){}
       }
+      // 3) Cookies fallback
+      if (!hasSession) {
+        try {
+          var c = document.cookie || '';
+          if (c.indexOf('firebaseauth') !== -1 || c.indexOf('__session') !== -1) hasSession = true;
+        } catch(_){}
+      }
+
+      // Always inject the cached-hide style so the class can toggle overlay off.
+      document.write('<style id="ymco-auth-cached-style">html.ymco-auth-cached #auth-overlay{display:none !important;}html.ymco-auth-cached body{overflow:auto !important;}html.ymco-auth-pending #auth-overlay{display:none !important;}html.ymco-auth-pending body{overflow:auto !important;}</style>');
+      if (hasSession) document.documentElement.classList.add('ymco-auth-cached');
+
+      // Safety timeout: mark as "pending" for 1800ms so overlay stays hidden while
+      // Firebase restores the session in the background. Removed automatically.
+      document.documentElement.classList.add('ymco-auth-pending');
+      setTimeout(function(){
+        try { document.documentElement.classList.remove('ymco-auth-pending'); } catch(_){}
+      }, 1800);
     } catch(_){}
   })();
 </script>
@@ -25476,6 +25515,10 @@ window.toggleInjuryPrintPreview = function(){
       closeChecklistRoleChoice();
       openAuditorView(unit);
     };
+    // Safety belt: if auth-locked is still applied (e.g. Firebase hasn't resolved yet
+    // after navigation from checklists.html), remove it so the role modal isn't blurred.
+    // The user reached this point via a successful scan, so the UI must be interactive.
+    try { document.body.classList.remove('auth-locked'); document.documentElement.classList.add('ymco-auth-cached'); } catch(_){}
     m.style.display = 'flex';
   }
 
@@ -26226,15 +26269,36 @@ window.toggleInjuryPrintPreview = function(){
       if (tries <= 0) return;
       setTimeout(function(){ waitFor(cond, cb, tries - 1); }, 150);
     }
+    // Wait until Firebase Auth has FIRED at least once (so we know whether a session
+    // exists), not just until currentUser is truthy. Otherwise scan.html / checklists.html
+    // navigations can hang here for up to 30s if Auth resolves as "no user" — which is a
+    // legitimate state that should stop the auto-open, not stall it forever.
+    var __authResolved = false, __authUser = null;
+    try {
+      if (window.firebase && firebase.auth) {
+        var __unsub = firebase.auth().onAuthStateChanged(function(u){
+          __authResolved = true; __authUser = u || null;
+          try { __unsub && __unsub(); } catch(_){}
+        });
+      } else {
+        __authResolved = true; // no firebase — behave as before
+      }
+    } catch(_){ __authResolved = true; }
     function ready(){
-      var authed = true;
-      try { authed = !!(window.firebase && firebase.auth && firebase.auth().currentUser); } catch(e){}
+      if (!__authResolved) return false;
+      if (!__authUser) return true; // resolved but not logged-in → let cb bail early
       var readyFn = window.__checklistsReady;
-      return authed && typeof window.openChecklistsHub === 'function'
+      return typeof window.openChecklistsHub === 'function'
              && (typeof readyFn !== 'function' || readyFn());
     }
     document.addEventListener('DOMContentLoaded', function(){
       waitFor(ready, function(){
+        // Auth resolved but user is not logged in → skip auto-open so the login
+        // overlay can appear normally instead of firing hub actions in the background.
+        if (!__authUser) {
+          try { history.replaceState({}, '', location.pathname); } catch(_){}
+          return;
+        }
         try {
           if (code) {
             window.openChecklistsHub();
