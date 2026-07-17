@@ -6248,7 +6248,22 @@ body.splash-active{overflow:hidden;}
   }
   #auth-overlay.hidden{ display:none !important; }
   body.auth-locked{ overflow:hidden; }
-  body.auth-locked > *:not(#auth-overlay):not(#ertOverlay):not(script):not(style){ filter: blur(6px); pointer-events:none; user-select:none; } body.auth-locked.ert-standalone-page > *{ filter:none !important; pointer-events:auto !important; user-select:auto !important; }
+  body.auth-locked > *:not(#auth-overlay):not(#ertOverlay):not(#clRoleChoiceModal):not(#clAuditorModal):not(script):not(style){ filter: blur(6px); pointer-events:none; user-select:none; }
+  body.auth-locked > #clRoleChoiceModal,
+  body.auth-locked > #clAuditorModal{ filter:none !important; backdrop-filter:none !important; -webkit-backdrop-filter:none !important; pointer-events:auto !important; user-select:auto !important; }
+  body.auth-locked.ert-standalone-page > *{ filter:none !important; pointer-events:auto !important; user-select:auto !important; }
+
+  /* Checklists role/auditor modals are available before login too; never blur them with auth lock. */
+  body.auth-locked #clRoleChoiceModal,
+  body.auth-locked #clRoleChoiceModal *,
+  body.auth-locked #clAuditorModal,
+  body.auth-locked #clAuditorModal *{
+    filter:none !important;
+    backdrop-filter:none !important;
+    -webkit-backdrop-filter:none !important;
+    opacity:1 !important;
+    pointer-events:auto !important;
+  }
 
   /* ---- Left decorative panel ---- */
   .auth-hero{
@@ -25396,9 +25411,9 @@ window.toggleInjuryPrintPreview = function(){
     if (m) return m;
     m = document.createElement('div');
     m.id = 'clRoleChoiceModal';
-    m.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.75);z-index:1000010;display:none;align-items:center;justify-content:center;padding:20px;';
+    m.style.cssText = 'position:fixed;inset:0;background:#0f172acc;z-index:1000010;display:none;align-items:center;justify-content:center;padding:20px;filter:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;opacity:1!important;transform:none!important;';
     m.innerHTML = `
-      <div style="background:#fff;border-radius:16px;max-width:520px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.35);">
+      <div style="background:#fff;border-radius:16px;max-width:520px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.35);filter:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;opacity:1!important;transform:none!important;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
           <h2 style="margin:0;font-size:1.15rem;color:#0f172a;"><i class="fas fa-user-shield"></i> Select Role — اختر الصلاحية</h2>
           <button type="button" onclick="closeChecklistRoleChoice()" style="background:#f1f5f9;border:none;width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:16px;color:#475569;">&times;</button>
@@ -25485,9 +25500,9 @@ window.toggleInjuryPrintPreview = function(){
     if (m) return m;
     m = document.createElement('div');
     m.id = 'clAuditorModal';
-    m.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.75);z-index:1000011;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;';
+    m.style.cssText = 'position:fixed;inset:0;background:#0f172acc;z-index:1000011;display:none;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto;filter:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;opacity:1!important;transform:none!important;';
     m.innerHTML = `
-      <div style="background:#fff;border-radius:16px;max-width:820px;width:100%;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.35);margin:20px 0;">
+      <div style="background:#fff;border-radius:16px;max-width:820px;width:100%;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.35);margin:20px 0;filter:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;opacity:1!important;transform:none!important;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;">
           <h2 id="clAuditorTitle" style="margin:0;font-size:1.1rem;color:#0f172a;"><i class="fas fa-eye"></i> Auditor View — عرض المفتش</h2>
           <button type="button" onclick="closeAuditorView()" style="background:#f1f5f9;border:none;width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:16px;color:#475569;">&times;</button>
