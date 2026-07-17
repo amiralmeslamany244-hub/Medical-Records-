@@ -6669,6 +6669,23 @@ body.splash-active{overflow:hidden;}
 </style>
 
 <!-- ===== AUTH: Login overlay ===== -->
+<script>
+  // Pre-hide the login overlay if Firebase already has a persisted session in localStorage.
+  // Avoids flashing the login screen on every navigation (e.g. returning from checklists.html).
+  // If Firebase later reports no user, lockUI() removes the ymco-auth-cached class to re-show it.
+  (function(){
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf('firebase:authUser:') === 0) {
+          document.write('<style id="ymco-auth-cached-style">html.ymco-auth-cached #auth-overlay{display:none !important;}html.ymco-auth-cached body{overflow:auto !important;}</style>');
+          document.documentElement.classList.add('ymco-auth-cached');
+          break;
+        }
+      }
+    } catch(_){}
+  })();
+</script>
 <div id="auth-overlay">
   <aside class="auth-hero" aria-hidden="true">
     <div class="auth-hero-top">
@@ -19193,6 +19210,7 @@ window.toggleInjuryPrintPreview = function(){
 
   function lockUI(){
     try { if (new URLSearchParams(location.search).get('page') === 'medical-tracking') return; } catch(_){ }
+    document.documentElement.classList.remove('ymco-auth-cached');
     overlay.classList.remove('hidden');
     document.body.classList.add('auth-locked');
     widget.classList.remove('show');
